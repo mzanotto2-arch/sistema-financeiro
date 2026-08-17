@@ -5,18 +5,18 @@ import type { Cliente } from "../types/cliente";
 import {
   listarParcelas,
   salvarParcela,
+  atualizarParcela,
   excluirParcela,
 } from "../services/parcelasService";
 
 import { listarClientes } from "../services/clientesService";
 
 export default function Parcelas() {
-
-  console.log("PARCELAS ATUALIZADO");
-
   const [id, setId] = useState<number | undefined>();
+
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
+
   const [clienteId, setClienteId] = useState("");
   const [proposta, setProposta] = useState("");
   const [parcela, setParcela] = useState("");
@@ -32,25 +32,30 @@ export default function Parcelas() {
     carregarDados();
   }, []);
 
- async function carregarDados() {
-  const listaClientes = await listarClientes();
-  setClientes(listaClientes);
+  async function carregarDados() {
+    try {
+      const listaClientes = await listarClientes();
+      setClientes(listaClientes);
 
-  const listaParcelas = await listarParcelas();
-  setParcelas(listaParcelas);
-}
+      const listaParcelas = await listarParcelas();
+      setParcelas(listaParcelas);
+    } catch (error) {
+      console.error(error);
+    }
+  }
 
-function selecionarCliente(idSelecionado: string) {
-  setClienteId(idSelecionado);
+  function selecionarCliente(idSelecionado: string) {
+    setClienteId(idSelecionado);
 
-  const cliente = clientes.find(
-    (c) => c.id === Number(idSelecionado)
-  );
+    const cliente = clientes.find(
+      (c) => c.id === Number(idSelecionado)
+    );
 
-  if (!cliente) return;
+    if (!cliente) return;
 
-  setProposta(String(cliente.proposta));
-}
+    setProposta(String(cliente.proposta));
+  }
+
   function limparFormulario() {
     setId(undefined);
 
@@ -67,73 +72,84 @@ function selecionarCliente(idSelecionado: string) {
   }
 
   async function salvar() {
-    alert("Entrou na função salvar");
+    if (!clienteId) {
+      alert("Selecione um cliente.");
+      return;
+    }
+
+    if (!parcela.trim()) {
+      alert("Informe a parcela.");
+      return;
+    }
 
     const dados: Parcela = {
-  cliente_id: Number(clienteId),
-  proposta: proposta && proposta !== "null" ? Number(proposta) : 0,
-  parcela,
-  valor: Number(valor),
-  vencimento,
-  status,
-  data_pagamento: dataPagamento,
-  forma_pagamento: formaPagamento,
-  observacoes,
-} as Parcela;
+      cliente_id: Number(clienteId),
+      proposta: proposta && proposta !== "null" ? Number(proposta) : 0,
+      parcela,
+      valor: Number(valor),
+      vencimento,
+      status,
+      data_pagamento: dataPagamento,
+      forma_pagamento: formaPagamento,
+      observacoes,
+    };
 
-  try {
-    await salvarParcela(dados);
+    try {
+      if (id) {
+        await atualizarParcela({
+          id,
+          ...dados,
+        });
 
-    alert("Parcela salva com sucesso!");
+        alert("Parcela atualizada com sucesso!");
+      } else {
+        await salvarParcela(dados);
 
-    limparFormulario();
+        alert("Parcela salva com sucesso!");
+      }
 
-    await carregarDados();
+      limparFormulario();
 
-} catch (error) {
-    console.error(error);
-    alert("Erro ao salvar a parcela. Veja o Console (F12).");
-}
+      await carregarDados();
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao salvar/atualizar a parcela. Veja o Console (F12).");
+    }
+  }
 
-}   // <-- ESTA CHAVE ESTÁ FALTANDO
-
-function editar(item: Parcela) {
+  function editar(item: Parcela) {
     setId(item.id);
+
     setClienteId(String(item.cliente_id ?? ""));
     setProposta(String(item.proposta));
 
     setParcela(item.parcela);
-       setValor(String(item.valor));
+    setValor(String(item.valor));
     setVencimento(item.vencimento);
 
     setStatus(item.status);
     setFormaPagamento(item.forma_pagamento ?? "");
     setDataPagamento(item.data_pagamento ?? "");
-    setObservacoes(item.observacoes);
+    setObservacoes(item.observacoes ?? "");
   }
 
   async function excluir(id: number) {
-  alert("ID recebido: " + id);
+    if (!confirm("Deseja excluir esta parcela?")) return;
 
-  if (!confirm("Deseja excluir esta parcela?")) return;
+    try {
+      await excluirParcela(id);
 
-  try {
-    await excluirParcela(id);
+      alert("Parcela excluída com sucesso!");
 
-    alert("Excluiu no banco!");
-
-    await carregarDados();
-
-    alert("Lista atualizada!");
-  } catch (error: any) {
-    console.error(error);
-    alert(JSON.stringify(error));
+      await carregarDados();
+    } catch (error: any) {
+      console.error(error);
+      alert(error.message || "Erro ao excluir a parcela.");
+    }
   }
-}
 
   return (
     <div style={{ padding: 30, fontFamily: "Arial" }}>
-
       <h2>💳 Controle de Parcelas</h2>
 
       <p>Cliente</p>
@@ -145,15 +161,11 @@ function editar(item: Parcela) {
       >
         <option value="">Selecione...</option>
 
-        
-{clientes.map((cliente) => (
-  <option
-    key={cliente.id}
-    value={cliente.id}
-  >
-    {cliente.proposta} - {cliente.instituicao}
-  </option>
-))}
+        {clientes.map((cliente) => (
+          <option key={cliente.id} value={cliente.id}>
+            {cliente.proposta} - {cliente.instituicao}
+          </option>
+        ))}
       </select>
 
       <p>Proposta</p>
@@ -241,7 +253,8 @@ function editar(item: Parcela) {
       <hr />
 
       <h3>Parcelas Cadastradas</h3>
-            {parcelas.length === 0 ? (
+
+      {parcelas.length === 0 ? (
         <p>Nenhuma parcela cadastrada.</p>
       ) : (
         parcelas.map((item) => (
@@ -307,6 +320,6 @@ function editar(item: Parcela) {
           </div>
         ))
       )}
-          </div>
+    </div>
   );
 }

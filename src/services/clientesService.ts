@@ -35,5 +35,8 @@ export async function excluirCliente(id: number) {
     .delete()
     .eq("id", id);
 
-  if (error) throw error;
+  if (error) {
+    console.error("Erro ao excluir cliente:", error);
+    throw error;
+  }
 }
