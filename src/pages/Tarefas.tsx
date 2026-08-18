@@ -118,6 +118,8 @@ export default function Tarefas() {
 
   const [horario, setHorario] = useState("");
 
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+
   useEffect(() => {
     carregarTarefas();
   }, []);
@@ -196,6 +198,64 @@ export default function Tarefas() {
       alert(
         error.message ||
           "Erro ao salvar tarefa."
+      );
+    }
+  }
+
+  function preencherEdicao(tarefa: Tarefa) {
+    setEditandoId(tarefa.id);
+    setTitulo(tarefa.title);
+    setObservacoes(tarefa.notes || "");
+    setPrioridade(tarefa.priority);
+    setTipo(tarefa.task_type);
+    setDataPrazo(tarefa.due_date || hoje);
+    setHorario(tarefa.due_time || "");
+    setMostrarFormulario(true);
+    setMostrarHistorico(false);
+  }
+
+  async function atualizarTarefa() {
+    if (!editandoId) return;
+
+    if (!titulo.trim()) {
+      alert("Informe a tarefa.");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("tasks")
+        .update({
+          title: titulo.trim(),
+          notes: observacoes.trim() || null,
+          priority: prioridade,
+          task_type: tipo,
+          due_date: dataPrazo || null,
+          due_time: horario || null,
+          is_important:
+            prioridade === "high" ||
+            prioridade === "urgent",
+          is_urgent:
+            prioridade === "urgent",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", editandoId);
+
+      if (error) throw error;
+
+      limparFormulario();
+      setEditandoId(null);
+      setMostrarFormulario(false);
+
+      await carregarTarefas();
+
+      alert("Tarefa atualizada com sucesso!");
+    } catch (error: any) {
+      console.error(error);
+
+      alert(
+        error.message ||
+          "Erro ao atualizar tarefa."
       );
     }
   }
@@ -295,6 +355,7 @@ export default function Tarefas() {
   }
 
   function limparFormulario() {
+    setEditandoId(null);
     setTitulo("");
     setObservacoes("");
     setPrioridade("medium");
@@ -445,13 +506,45 @@ export default function Tarefas() {
     if (!arrastando) return;
 
     const id = arrastando;
+    setArrastando(null);
+
+    await mudarStatus(id, novoStatus);
+  }
+
+  async function soltarNasAtrasadas() {
+    if (!arrastando) return;
+
+    const id = arrastando;
+    const tarefa = tarefas.find((item) => item.id === id);
 
     setArrastando(null);
 
-    await mudarStatus(
-      id,
-      novoStatus
-    );
+    if (!tarefa || tarefa.status === "done") return;
+
+    // "Atrasadas" não é um status do banco.
+    // Para uma tarefa entrar nessa coluna de forma real,
+    // colocamos o prazo para ontem e mantemos seu status atual.
+    const novaData = adicionarDias(hoje, -1);
+
+    try {
+      const { error } = await supabase
+        .from("tasks")
+        .update({
+          due_date: novaData,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      await carregarTarefas();
+    } catch (error: any) {
+      console.error(error);
+      alert(
+        error.message ||
+          "Erro ao colocar a tarefa como atrasada."
+      );
+    }
   }
 
   function Cartao({
@@ -467,9 +560,15 @@ export default function Tarefas() {
     return (
       <div
         draggable
-        onDragStart={() =>
-          iniciarArraste(tarefa.id)
-        }
+        onDragStart={(e) => {
+          iniciarArraste(tarefa.id);
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData(
+            "text/plain",
+            tarefa.id
+          );
+        }}
+        onDragEnd={() => setArrastando(null)}
         style={{
           background: "#fff",
           borderRadius: 10,
@@ -590,6 +689,11 @@ export default function Tarefas() {
             marginTop: 10,
           }}
         >
+          <button
+            onClick={() => preencherEdicao(tarefa)}
+          >
+            ✏️ Editar
+          </button>
           {tarefa.status ===
             "todo" && (
             <button
@@ -615,6 +719,23 @@ export default function Tarefas() {
               }
             >
               ✅ Concluir
+            </button>
+          )}
+
+          {tarefa.status !== "done" && tarefa.due_date && (
+            <button
+              onClick={() => {
+                const novaData = prompt(
+                  "Digite a nova data (AAAA-MM-DD):",
+                  tarefa.due_date || hoje
+                );
+
+                if (novaData) {
+                  alterarData(tarefa.id, novaData);
+                }
+              }}
+            >
+              🔄 Reprogramar
             </button>
           )}
 
@@ -909,7 +1030,9 @@ export default function Tarefas() {
           }}
         >
           <h3>
-            ➕ Criar compromisso ou tarefa
+            {editandoId
+              ? "✏️ Editar tarefa"
+              : "➕ Criar compromisso ou tarefa"}
           </h3>
 
           <p>Tarefa / compromisso</p>
@@ -1040,13 +1163,17 @@ export default function Tarefas() {
             }}
           >
             <button
-              onClick={salvarTarefa}
+              onClick={
+                editandoId
+                  ? atualizarTarefa
+                  : salvarTarefa
+              }
               style={{
                 padding:
                   "10px 16px",
               }}
             >
-              💾 Salvar
+              💾 {editandoId ? "Salvar alterações" : "Salvar"}
             </button>
 
             <button
@@ -1405,6 +1532,15 @@ export default function Tarefas() {
 
           <div
             style={{
+              color: "#64748b",
+              marginBottom: 12,
+            }}
+          >
+            Arraste cada tarefa para a coluna que representa a situação atual.
+          </div>
+
+          <div
+            style={{
               display:
                 "flex",
               gap: 15,
@@ -1430,22 +1566,60 @@ export default function Tarefas() {
               fundo="#eff6ff"
             />
 
-            <ColunaKanban
-              titulo="Atrasadas"
-              emoji="⚠️"
-              lista={atrasadas}
-              status="todo"
-              fundo="#fff1f2"
-            />
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+              }}
+              onDrop={soltarNasAtrasadas}
+              style={{
+                flex: 1,
+                minWidth: 280,
+                background: "#fff1f2",
+                borderRadius: 12,
+                padding: 15,
+                minHeight: 480,
+                border: "1px solid #ddd",
+              }}
+            >
+              <h3
+                style={{
+                  textAlign: "center",
+                  marginTop: 0,
+                }}
+              >
+                ⚠️ Atrasadas ({atrasadas.length})
+              </h3>
+
+              {atrasadas.length === 0 ? (
+                <div
+                  style={{
+                    border: "2px dashed #cbd5e1",
+                    borderRadius: 10,
+                    padding: 35,
+                    textAlign: "center",
+                    color: "#64748b",
+                  }}
+                >
+                  Arraste tarefas para cá
+                </div>
+              ) : (
+                atrasadas.map((tarefa) => (
+                  <Cartao
+                    key={tarefa.id}
+                    tarefa={tarefa}
+                  />
+                ))
+              )}
+            </div>
 
             <div
-              onDragOver={(e) =>
-                e.preventDefault()
-              }
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+              }}
               onDrop={() =>
-                soltarNaColuna(
-                  "done"
-                )
+                soltarNaColuna("done")
               }
               style={{
                 flex: 1,
