@@ -4,10 +4,12 @@ import Layout from "./components/Layout";
 
 import Dashboard from "./pages/Dashboard";
 import Clientes from "./pages/Clientes";
+import Contatos from "./pages/Contatos";
 import Receitas from "./pages/Receitas";
 import Despesas from "./pages/Despesas";
 import Parcelas from "./pages/Parcelas";
 import Pesquisa from "./pages/Pesquisa";
+import Tarefas from "./pages/Tarefas";
 
 import Login from "./auth/Login";
 import RedefinirSenha from "./auth/RedefinirSenha";
@@ -54,6 +56,18 @@ function App() {
           }
         />
 
+        {/* CONTATOS */}
+        <Route
+          path="/contatos"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Contatos />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+
         {/* RECEITAS */}
         <Route
           path="/receitas"
@@ -85,6 +99,18 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <Parcelas />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* TAREFAS */}
+        <Route
+          path="/tarefas"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Tarefas />
               </Layout>
             </ProtectedRoute>
           }

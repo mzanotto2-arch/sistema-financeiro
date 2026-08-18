@@ -10,16 +10,17 @@ export default function Menu() {
   const menus = [
     { nome: "📊 Dashboard", rota: "/" },
     { nome: "👥 Clientes", rota: "/clientes" },
+    { nome: "📞 Contatos", rota: "/contatos" },
     { nome: "💰 Receitas", rota: "/receitas" },
     { nome: "💸 Despesas", rota: "/despesas" },
     { nome: "💳 Parcelas", rota: "/parcelas" },
+    { nome: "📅 Tarefas", rota: "/tarefas" },
     { nome: "🔍 Pesquisa", rota: "/pesquisa" },
   ];
 
   async function sair() {
     try {
       await logout();
-
       navigate("/login");
     } catch (error: any) {
       alert(error.message);
