@@ -17,16 +17,24 @@ export async function salvarCliente(cliente: Cliente) {
     .from("clientes")
     .insert([cliente]);
 
-  if (error) throw error;
+  if (error) {
+    console.error("Erro ao salvar cliente:", error);
+    throw error;
+  }
 }
 
 export async function atualizarCliente(cliente: Cliente) {
+  const { id, ...dados } = cliente;
+
   const { error } = await supabase
     .from("clientes")
-    .update(cliente)
-    .eq("id", cliente.id);
+    .update(dados)
+    .eq("id", id);
 
-  if (error) throw error;
+  if (error) {
+    console.error("Erro ao atualizar cliente:", error);
+    throw error;
+  }
 }
 
 export async function excluirCliente(id: number) {
