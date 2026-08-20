@@ -18,10 +18,7 @@ import {
 
 import { supabase } from "../database/supabase";
 
-type ClienteComFinanceiro = Cliente & {
-  comissao_percentual?: number;
-  comissao_parcelas?: number;
-};
+type ClienteComFinanceiro = Cliente;
 
 type Comissao = {
   id?: number;
@@ -56,9 +53,6 @@ export default function Clientes() {
   const [pastaDocumentos, setPastaDocumentos] = useState("");
   const [consultor, setConsultor] = useState("");
   const [observacoes, setObservacoes] = useState("");
-
-  const [comissaoPercentual, setComissaoPercentual] = useState("");
-  const [comissaoParcelas, setComissaoParcelas] = useState("1");
 
   const [clientes, setClientes] = useState<ClienteComFinanceiro[]>([]);
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
@@ -316,8 +310,6 @@ export default function Clientes() {
         data_pagamento: dataHoje,
       });
 
-      await registrarComissaoDaParcela(item);
-
       await carregarDados();
 
       if (clienteSelecionado) {
@@ -362,54 +354,93 @@ export default function Clientes() {
     }
   }
 
-  async function registrarComissaoDaParcela(item: Parcela) {
-    if (!item.cliente_id) return;
+  function calcularDataSemanal(numeroParcela: number) {
+    const data = new Date();
+    data.setHours(12, 0, 0, 0);
+    data.setDate(data.getDate() + (numeroParcela - 1) * 7);
 
-    const cliente = clientes.find(
-      (c) => Number(c.id) === Number(item.cliente_id)
+    const ano = data.getFullYear();
+    const mes = String(data.getMonth() + 1).padStart(2, "0");
+    const dia = String(data.getDate()).padStart(2, "0");
+
+    return `${ano}-${mes}-${dia}`;
+  }
+
+  async function gerarPagamentosProfissional() {
+    if (!clienteSelecionado?.id) return;
+
+    const existentes = obterComissoesCliente(clienteSelecionado.id);
+
+    if (existentes.length > 0) {
+      alert(
+        "Este contrato já possui pagamentos do profissional cadastrados. Para gerar novamente, exclua primeiro os pagamentos existentes."
+      );
+      return;
+    }
+
+    const valorInformado = prompt(
+      "Qual é o valor TOTAL que será pago ao profissional?\n\nEx.: 1.000,00"
     );
 
-    if (!cliente) return;
+    if (valorInformado === null) return;
 
-    const percentual = Number(cliente.comissao_percentual || 0);
+    const total = converterValor(valorInformado);
 
-    if (percentual <= 0) return;
+    if (total <= 0) {
+      alert("Informe um valor total válido.");
+      return;
+    }
 
-    const quantidadeComissao = Number(
-      cliente.comissao_parcelas || 1
+    const quantidadeInformada = prompt(
+      "Em quantas parcelas semanais o profissional receberá?\n\nEx.: 7"
     );
 
-    const valorComissao =
-      Number(item.valor || 0) * (percentual / 100);
+    if (quantidadeInformada === null) return;
 
-    const numeroParcela =
-      Number(String(item.parcela).split("/")[0]) || 1;
+    const quantidade = Number(quantidadeInformada);
 
-    const jaExiste = comissoes.some(
-      (comissao) =>
-        Number(comissao.cliente_id) === Number(item.cliente_id) &&
-        String(comissao.parcela).split("/")[0] ===
-          String(numeroParcela)
-    );
+    if (!Number.isInteger(quantidade) || quantidade <= 0) {
+      alert("Informe uma quantidade de parcelas válida.");
+      return;
+    }
 
-    if (jaExiste) return;
+    const totalCentavos = Math.round(total * 100);
+    const valorBaseCentavos = Math.floor(totalCentavos / quantidade);
+    const restoCentavos = totalCentavos % quantidade;
 
-    const novaComissao: Comissao = {
-      cliente_id: Number(item.cliente_id),
-      parcela: `${numeroParcela}/${quantidadeComissao}`,
-      valor: valorComissao,
-      vencimento: item.data_pagamento,
-      status: "Em Aberto",
-      data_pagamento: "",
-      observacoes: `Comissão de ${percentual}% referente à parcela ${item.parcela}.`,
-    };
+    try {
+      setCarregando(true);
 
-    const { error } = await supabase
-      .from("comissoes")
-      .insert([novaComissao]);
+      for (let numero = 1; numero <= quantidade; numero++) {
+        const valorCentavos =
+          valorBaseCentavos + (numero <= restoCentavos ? 1 : 0);
 
-    if (error) {
-      console.error("Erro ao registrar comissão:", error);
+        const novaComissao: Comissao = {
+  cliente_id: clienteSelecionado.id,
+  parcela: `${numero}/${quantidade}`,
+  valor: valorCentavos / 100,
+  vencimento: calcularDataSemanal(numero),
+  status: "Em Aberto",
+  observacoes: `Pagamento semanal do profissional ${clienteSelecionado.consultor || ""}. Total do contrato: ${formatarMoeda(total)}.`,
+};
+
+        const { error } = await supabase
+          .from("comissoes")
+          .insert([novaComissao]);
+
+        if (error) throw error;
+      }
+
+      await carregarDados();
+
+      alert(
+        `Pagamentos gerados com sucesso!\n\nTotal: ${formatarMoeda(total)}\nParcelas: ${quantidade}\nPagamento: semanal`
+      );
+    } catch (error) {
+      console.error("Erro ao gerar pagamentos do profissional:", error);
+      alert("Erro ao gerar os pagamentos do profissional.");
+    } finally {
+      setCarregando(false);
     }
   }
 
@@ -438,6 +469,30 @@ export default function Clientes() {
     } catch (error) {
       console.error(error);
       alert("Erro ao baixar comissão.");
+    }
+  }
+
+  async function reabrirComissao(comissao: Comissao) {
+    if (!comissao.id) return;
+
+    if (!confirm(`Reabrir o pagamento ${comissao.parcela}?`)) return;
+
+    try {
+      const { error } = await supabase
+        .from("comissoes")
+        .update({
+          status: "Em Aberto",
+          data_pagamento: null,
+        })
+        .eq("id", comissao.id);
+
+      if (error) throw error;
+
+      await carregarDados();
+      alert("Pagamento reaberto.");
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao reabrir o pagamento.");
     }
   }
 
@@ -487,8 +542,6 @@ export default function Clientes() {
       pasta_documentos: pastaDocumentos,
       consultor,
       observacoes,
-      comissao_percentual: Number(comissaoPercentual || 0),
-      comissao_parcelas: Number(comissaoParcelas || 1),
     };
 
     try {
@@ -545,13 +598,6 @@ export default function Clientes() {
     setConsultor(cliente.consultor || "");
     setObservacoes(cliente.observacoes || "");
 
-    setComissaoPercentual(
-      String(cliente.comissao_percentual || "")
-    );
-    setComissaoParcelas(
-      String(cliente.comissao_parcelas || 1)
-    );
-
     window.scrollTo({
       top: 0,
       behavior: "smooth",
@@ -598,8 +644,6 @@ export default function Clientes() {
     setConsultor("");
     setObservacoes("");
 
-    setComissaoPercentual("");
-    setComissaoParcelas("1");
   }
 
   const clientesFiltrados = useMemo(() => {
@@ -784,35 +828,12 @@ export default function Clientes() {
 
         <hr />
 
-        <h3>💰 Comissão do Consultor</h3>
+        <h3>💼 Pagamento do Profissional</h3>
 
-        <p>Percentual da Comissão</p>
-
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          value={comissaoPercentual}
-          onChange={(e) =>
-            setComissaoPercentual(e.target.value)
-          }
-          placeholder="Ex.: 10"
-          style={{ width: 150, padding: 8 }}
-        />
-
-        <span style={{ marginLeft: 8 }}>%</span>
-
-        <p>Quantidade de parcelas da comissão</p>
-
-        <input
-          type="number"
-          min="1"
-          value={comissaoParcelas}
-          onChange={(e) =>
-            setComissaoParcelas(e.target.value)
-          }
-          style={{ width: 150, padding: 8 }}
-        />
+        <p style={{ maxWidth: 650, color: "#555" }}>
+          O pagamento do profissional será controlado dentro do Financeiro deste contrato.
+          Você informa o valor total e a quantidade de parcelas semanais na hora de gerar os pagamentos.
+        </p>
 
         <hr />
 
@@ -1414,20 +1435,11 @@ export default function Clientes() {
 
           <hr />
 
-          <h3>💼 Comissão do Consultor</h3>
+          <h3>💼 Pagamento do Profissional</h3>
 
           <p>
-            <strong>Consultor:</strong>{" "}
-            {clienteSelecionado.consultor || "-"}
-          </p>
-
-          <p>
-            <strong>Percentual:</strong>{" "}
-            {Number(
-              clienteSelecionado.comissao_percentual ||
-                0
-            )}
-            %
+            <strong>Profissional:</strong>{" "}
+            {clienteSelecionado.consultor || "Não informado"}
           </p>
 
           <div
@@ -1436,18 +1448,24 @@ export default function Clientes() {
               gridTemplateColumns:
                 "repeat(auto-fit, minmax(180px, 1fr))",
               gap: 12,
+              marginBottom: 15,
             }}
           >
             <div
               style={{
                 padding: 15,
-                background: "#fef3c7",
+                background: "#eef2ff",
                 borderRadius: 8,
               }}
             >
-              <strong>Comissão em aberto</strong>
+              <strong>Total do profissional</strong>
               <h3>
-                {formatarMoeda(totalComissaoAberta)}
+                {formatarMoeda(
+                  comissoesSelecionadas.reduce(
+                    (total, item) => total + Number(item.valor || 0),
+                    0
+                  )
+                )}
               </h3>
             </div>
 
@@ -1458,134 +1476,187 @@ export default function Clientes() {
                 borderRadius: 8,
               }}
             >
-              <strong>Comissão paga</strong>
-              <h3>
+              <strong>Total pago</strong>
+              <h3 style={{ color: "#15803d" }}>
                 {formatarMoeda(totalComissaoPaga)}
               </h3>
             </div>
-          </div>
 
-          {comissoesSelecionadas.length === 0 ? (
-            <p>
-              Nenhuma comissão registrada ainda.
-              <br />
-              As comissões serão criadas quando as
-              parcelas do cliente forem recebidas.
-            </p>
-          ) : (
             <div
               style={{
-                overflowX: "auto",
-                marginTop: 15,
+                padding: 15,
+                background: "#fff7ed",
+                borderRadius: 8,
               }}
             >
+              <strong>Total em aberto</strong>
+              <h3 style={{ color: "#b45309" }}>
+                {formatarMoeda(totalComissaoAberta)}
+              </h3>
+            </div>
+
+            <div
+              style={{
+                padding: 15,
+                background: "#f3f4f6",
+                borderRadius: 8,
+              }}
+            >
+              <strong>Situação</strong>
+              <h3>
+                {comissoesSelecionadas.filter(
+                  (item) =>
+                    item.status.toLowerCase() === "pago" ||
+                    item.status.toLowerCase() === "recebido"
+                ).length}
+                /{comissoesSelecionadas.length}
+              </h3>
+              <small>pagamentos feitos</small>
+            </div>
+          </div>
+
+          <button
+            onClick={gerarPagamentosProfissional}
+            disabled={carregando || comissoesSelecionadas.length > 0}
+            style={{
+              background: comissoesSelecionadas.length > 0 ? "#9ca3af" : "#2563eb",
+              color: "#fff",
+              border: "none",
+              padding: "9px 14px",
+              borderRadius: 6,
+              cursor: comissoesSelecionadas.length > 0 ? "not-allowed" : "pointer",
+              marginBottom: 15,
+            }}
+          >
+            ➕ Gerar pagamentos do profissional
+          </button>
+
+          {comissoesSelecionadas.length === 0 ? (
+            <div
+              style={{
+                padding: 20,
+                background: "#f9fafb",
+                borderRadius: 8,
+              }}
+            >
+              <p>
+                Nenhum pagamento do profissional foi gerado ainda.
+              </p>
+              <p>
+                Clique em <strong>Gerar pagamentos do profissional</strong> para informar o valor total e a quantidade de parcelas semanais.
+              </p>
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto", marginTop: 10 }}>
               <table
                 style={{
                   width: "100%",
                   borderCollapse: "collapse",
+                  minWidth: 800,
                 }}
               >
                 <thead>
-                  <tr
-                    style={{
-                      background: "#f3f4f6",
-                    }}
-                  >
-                    <th style={{ padding: 10 }}>
-                      Parcela
-                    </th>
-                    <th style={{ padding: 10 }}>
-                      Valor
-                    </th>
-                    <th style={{ padding: 10 }}>
-                      Status
-                    </th>
-                    <th style={{ padding: 10 }}>
-                      Pagamento
-                    </th>
-                    <th style={{ padding: 10 }}>
-                      Ação
-                    </th>
+                  <tr style={{ background: "#f3f4f6" }}>
+                    <th style={{ padding: 10 }}>Parcela</th>
+                    <th style={{ padding: 10 }}>Valor</th>
+                    <th style={{ padding: 10 }}>Vencimento</th>
+                    <th style={{ padding: 10 }}>Status</th>
+                    <th style={{ padding: 10 }}>Pagamento</th>
+                    <th style={{ padding: 10 }}>Ação</th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {comissoesSelecionadas.map(
-                    (comissao) => (
+                  {comissoesSelecionadas.map((comissao) => {
+                    const paga =
+                      comissao.status.toLowerCase() === "pago" ||
+                      comissao.status.toLowerCase() === "recebido";
+
+                    return (
                       <tr
                         key={comissao.id}
-                        style={{
-                          borderBottom:
-                            "1px solid #ddd",
-                        }}
+                        style={{ borderBottom: "1px solid #ddd" }}
                       >
-                        <td style={{ padding: 10 }}>
+                        <td
+                          style={{
+                            padding: 10,
+                            fontWeight: "bold",
+                          }}
+                        >
                           {comissao.parcela}
                         </td>
 
                         <td style={{ padding: 10 }}>
-                          {formatarMoeda(
-                            comissao.valor
+                          {formatarMoeda(comissao.valor)}
+                        </td>
+
+                        <td style={{ padding: 10 }}>
+                          {formatarData(comissao.vencimento)}
+                        </td>
+
+                        <td style={{ padding: 10 }}>
+                          {paga ? (
+                            <span
+                              style={{
+                                color: "#15803d",
+                                fontWeight: "bold",
+                              }}
+                            >
+                              🟢 Pago
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                color: "#b45309",
+                                fontWeight: "bold",
+                              }}
+                            >
+                              🟠 Em Aberto
+                            </span>
                           )}
                         </td>
 
                         <td style={{ padding: 10 }}>
-                          {comissao.status}
-                        </td>
-
-                        <td style={{ padding: 10 }}>
                           {comissao.data_pagamento
-                            ? formatarData(
-                                comissao.data_pagamento
-                              )
+                            ? formatarData(comissao.data_pagamento)
                             : "-"}
                         </td>
 
                         <td style={{ padding: 10 }}>
-                          {comissao.status.toLowerCase() ===
-                          "pago" ? (
-                            <span>
-                              ✅ Pago
-                            </span>
+                          {paga ? (
+                            <button
+                              onClick={() => reabrirComissao(comissao)}
+                            >
+                              ↩ Reabrir
+                            </button>
                           ) : (
                             <button
-                              onClick={() =>
-                                darBaixaComissao(
-                                  comissao
-                                )
-                              }
+                              onClick={() => darBaixaComissao(comissao)}
                               style={{
-                                background:
-                                  "#16a34a",
+                                background: "#16a34a",
                                 color: "#fff",
                                 border: "none",
                                 borderRadius: 5,
-                                padding:
-                                  "7px 10px",
+                                padding: "7px 10px",
+                                cursor: "pointer",
                               }}
                             >
-                              💵 Pagar comissão
+                              ✅ Dar baixa
                             </button>
                           )}
 
                           {comissao.id && (
                             <button
-                              onClick={() =>
-                                excluirComissao(
-                                  comissao.id!
-                                )
-                              }
-                              style={{
-                                marginLeft: 5,
-                              }}
+                              onClick={() => excluirComissao(comissao.id!)}
+                              style={{ marginLeft: 5 }}
                             >
                               🗑️
                             </button>
                           )}
                         </td>
                       </tr>
-                    )
-                  )}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

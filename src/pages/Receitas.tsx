@@ -32,8 +32,26 @@ export default function Receitas() {
       const listaReceitas = await listarReceitas();
       setReceitas(listaReceitas);
     } catch (error) {
-      console.error(error);
+      console.error("Erro ao carregar receitas:", error);
     }
+  }
+
+  function converterValor(valorDigitado: string): number {
+    if (!valorDigitado) return 0;
+
+    const valorLimpo = valorDigitado
+      .replace(/\s/g, "")
+      .replace(/\./g, "")
+      .replace(",", ".");
+
+    return Number(valorLimpo);
+  }
+
+  function formatarMoeda(valorNumero: number): string {
+    return Number(valorNumero || 0).toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
   }
 
   async function salvar() {
@@ -47,13 +65,25 @@ export default function Receitas() {
       return;
     }
 
+    const valorNumerico = converterValor(valor);
+
+    if (valorNumerico <= 0) {
+      alert("Informe um valor válido.");
+      return;
+    }
+
+    if (!vencimento) {
+      alert("Informe o vencimento.");
+      return;
+    }
+
     try {
-      if (id) {
+      if (id !== undefined) {
         await atualizarReceita({
           id,
           cliente,
           descricao,
-          valor: Number(valor),
+          valor: valorNumerico,
           vencimento,
           status: "Pendente",
           recebido: false,
@@ -64,7 +94,7 @@ export default function Receitas() {
         await salvarReceita({
           cliente,
           descricao,
-          valor: Number(valor),
+          valor: valorNumerico,
           vencimento,
           status: "Pendente",
           recebido: false,
@@ -77,7 +107,8 @@ export default function Receitas() {
 
       await carregarTudo();
     } catch (error: any) {
-      alert(error.message);
+      console.error("Erro ao salvar/atualizar receita:", error);
+      alert(error?.message || "Erro ao salvar a receita.");
     }
   }
 
@@ -86,7 +117,7 @@ export default function Receitas() {
 
     setCliente(receita.cliente);
     setDescricao(receita.descricao);
-    setValor(String(receita.valor));
+    setValor(String(receita.valor ?? ""));
     setVencimento(receita.vencimento);
   }
 
@@ -98,7 +129,8 @@ export default function Receitas() {
 
       await carregarTudo();
     } catch (error: any) {
-      alert(error.message);
+      console.error("Erro ao excluir receita:", error);
+      alert(error?.message || "Erro ao excluir a receita.");
     }
   }
 
@@ -111,7 +143,12 @@ export default function Receitas() {
   }
 
   return (
-    <div style={{ padding: 30, fontFamily: "Arial" }}>
+    <div
+      style={{
+        padding: 30,
+        fontFamily: "Arial",
+      }}
+    >
       <h2>💰 Cadastro de Receitas</h2>
 
       <p>Cliente</p>
@@ -119,7 +156,10 @@ export default function Receitas() {
       <select
         value={cliente}
         onChange={(e) => setCliente(e.target.value)}
-        style={{ width: 350 }}
+        style={{
+          width: 350,
+          padding: 8,
+        }}
       >
         <option value="">Selecione...</option>
 
@@ -133,18 +173,27 @@ export default function Receitas() {
       <p>Descrição</p>
 
       <input
+        type="text"
         value={descricao}
         onChange={(e) => setDescricao(e.target.value)}
-        style={{ width: 350 }}
+        style={{
+          width: 350,
+          padding: 8,
+        }}
       />
 
       <p>Valor</p>
 
       <input
-        type="number"
+        type="text"
+        inputMode="decimal"
         value={valor}
         onChange={(e) => setValor(e.target.value)}
-        style={{ width: 350 }}
+        placeholder="Ex.: 3.750,00"
+        style={{
+          width: 350,
+          padding: 8,
+        }}
       />
 
       <p>Vencimento</p>
@@ -153,19 +202,24 @@ export default function Receitas() {
         type="date"
         value={vencimento}
         onChange={(e) => setVencimento(e.target.value)}
-        style={{ width: 350 }}
+        style={{
+          width: 350,
+          padding: 8,
+        }}
       />
 
       <br />
       <br />
 
       <button onClick={salvar}>
-        {id ? "Atualizar Receita" : "Salvar Receita"}
+        {id !== undefined ? "Atualizar Receita" : "Salvar Receita"}
       </button>
 
-      {id && (
+      {id !== undefined && (
         <button
-          style={{ marginLeft: 10 }}
+          style={{
+            marginLeft: 10,
+          }}
           onClick={limparFormulario}
         >
           Cancelar
@@ -184,7 +238,7 @@ export default function Receitas() {
             key={receita.id}
             style={{
               border: "1px solid #ddd",
-              padding: 10,
+              padding: 15,
               borderRadius: 8,
               marginBottom: 10,
             }}
@@ -197,7 +251,7 @@ export default function Receitas() {
 
             <br />
 
-            Valor: R$ {receita.valor}
+            Valor: R$ {formatarMoeda(receita.valor)}
 
             <br />
 
@@ -219,7 +273,9 @@ export default function Receitas() {
             </button>
 
             <button
-              style={{ marginLeft: 10 }}
+              style={{
+                marginLeft: 10,
+              }}
               onClick={() => excluir(receita.id!)}
             >
               🗑️ Excluir

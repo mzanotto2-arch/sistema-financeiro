@@ -32,4 +32,9 @@ export interface Cliente {
   consultor: string;
 
   observacoes: string;
+
+  // Comissão do consultor
+  comissao_percentual?: number;
+
+  comissao_parcelas?: number;
 }
