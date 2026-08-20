@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import type { Cliente } from "../types/cliente";
 import type { Parcela } from "../types/parcela";
 
@@ -63,6 +64,7 @@ export default function Clientes() {
     useState<ClienteComFinanceiro | null>(null);
 
   const [carregando, setCarregando] = useState(false);
+  const [mostrarFormulario, setMostrarFormulario] = useState(false);
 
   useEffect(() => {
     carregarDados();
@@ -230,7 +232,7 @@ export default function Clientes() {
 
     return `${ano}-${mes}-${diaFinal}`;
   }
- async function gerarParcelas(cliente: ClienteComFinanceiro) {
+  async function gerarParcelas(cliente: ClienteComFinanceiro) {
     if (!cliente.id) {
       alert("Salve o cliente primeiro.");
       return;
@@ -570,6 +572,7 @@ export default function Clientes() {
   }
 
   function editar(cliente: ClienteComFinanceiro) {
+    setMostrarFormulario(true);
     setId(cliente.id);
 
     setProposta(String(cliente.proposta || ""));
@@ -643,6 +646,7 @@ export default function Clientes() {
     setPastaDocumentos("");
     setConsultor("");
     setObservacoes("");
+    setMostrarFormulario(false);
 
   }
 
@@ -653,18 +657,12 @@ export default function Clientes() {
 
     return clientes.filter((cliente) => {
       return (
-        String(cliente.proposta || "")
-          .toLowerCase()
-          .includes(termo) ||
-        cliente.instituicao
-          ?.toLowerCase()
-          .includes(termo) ||
-        cliente.responsavel
-          ?.toLowerCase()
-          .includes(termo) ||
-        cliente.consultor
-          ?.toLowerCase()
-          .includes(termo)
+        String(cliente.proposta ?? "").toLowerCase().includes(termo) ||
+        String(cliente.instituicao ?? "").toLowerCase().includes(termo) ||
+        String(cliente.responsavel ?? "").toLowerCase().includes(termo) ||
+        String(cliente.consultor ?? "").toLowerCase().includes(termo) ||
+        String(cliente.telefone ?? "").toLowerCase().includes(termo) ||
+        String(cliente.email ?? "").toLowerCase().includes(termo)
       );
     });
   }, [clientes, busca]);
@@ -678,9 +676,7 @@ export default function Clientes() {
     : [];
 
   const totalComissaoAberta = comissoesSelecionadas
-    .filter(
-      (item) => item.status.toLowerCase() === "em aberto"
-    )
+    .filter((item) => item.status.toLowerCase() === "em aberto")
     .reduce((total, item) => total + Number(item.valor || 0), 0);
 
   const totalComissaoPaga = comissoesSelecionadas
@@ -691,363 +687,490 @@ export default function Clientes() {
     )
     .reduce((total, item) => total + Number(item.valor || 0), 0);
 
+  const totalContratos = clientes.reduce(
+    (total, cliente) => total + resumoCliente(cliente).total,
+    0
+  );
+
+  const totalRecebido = clientes.reduce(
+    (total, cliente) => total + resumoCliente(cliente).recebido,
+    0
+  );
+
+  const totalAberto = clientes.reduce(
+    (total, cliente) => total + resumoCliente(cliente).aberto,
+    0
+  );
+
+  const clientesExibidos = clientesFiltrados;
+
   return (
     <div
       style={{
-        padding: 25,
-        fontFamily: "Arial",
-        background: "#f5f7fa",
         minHeight: "100vh",
+        background: "#f5f7fb",
+        padding: "24px",
+        fontFamily: "Arial, sans-serif",
+        color: "#1f2937",
       }}
     >
-      <h2>👥 Cadastro de Clientes</h2>
-
+      {/* CABEÇALHO */}
       <div
         style={{
-          background: "#fff",
-          padding: 20,
-          borderRadius: 12,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-          marginBottom: 25,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 16,
+          flexWrap: "wrap",
+          marginBottom: 18,
         }}
       >
-        <h3>{id ? "✏️ Editar Cliente" : "➕ Novo Cliente"}</h3>
-
-        <p>Nº da Proposta</p>
-
-        <input
-          value={proposta}
-          onChange={(e) => setProposta(e.target.value)}
-          style={{ width: 200, padding: 8 }}
-        />
-
-        <p>Instituição</p>
-
-        <input
-          value={instituicao}
-          onChange={(e) => setInstituicao(e.target.value)}
-          style={{ width: 400, padding: 8 }}
-        />
-
-        <p>Responsável</p>
-
-        <input
-          value={responsavel}
-          onChange={(e) => setResponsavel(e.target.value)}
-          style={{ width: 400, padding: 8 }}
-        />
-
-        <p>Telefone</p>
-
-        <input
-          value={telefone}
-          onChange={(e) => setTelefone(e.target.value)}
-          style={{ width: 250, padding: 8 }}
-        />
-
-        <p>E-mail</p>
-
-        <input
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={{ width: 400, padding: 8 }}
-        />
-
-        <hr />
-
-        <h3>📄 Contrato</h3>
-
-        <p>Nº do Contrato</p>
-
-        <input
-          value={contrato}
-          onChange={(e) => setContrato(e.target.value)}
-          style={{ width: 250, padding: 8 }}
-        />
-
-        <p>Valor da Parcela</p>
-
-        <input
-          type="text"
-          value={valorParcela}
-          onChange={(e) => setValorParcela(e.target.value)}
-          placeholder="Ex.: 3.750,00"
-          style={{ width: 180, padding: 8 }}
-        />
-
-        <p>Quantidade de Parcelas</p>
-
-        <input
-          type="number"
-          value={quantidadeParcelas}
-          onChange={(e) =>
-            setQuantidadeParcelas(e.target.value)
-          }
-          style={{ width: 180, padding: 8 }}
-        />
-
-        <p>Parcela Atual</p>
-
-        <input
-          value={parcelaAtual}
-          onChange={(e) => setParcelaAtual(e.target.value)}
-          placeholder="Ex.: 1/12"
-          style={{ width: 180, padding: 8 }}
-        />
-
-        <p>Dia do Vencimento</p>
-
-        <input
-          type="number"
-          value={diaVencimento}
-          onChange={(e) =>
-            setDiaVencimento(e.target.value)
-          }
-          style={{ width: 120, padding: 8 }}
-        />
-
-        <p>Início da Vigência</p>
-
-        <input
-          type="date"
-          value={inicioVigencia}
-          onChange={(e) =>
-            setInicioVigencia(e.target.value)
-          }
-        />
-
-        <p>Fim da Vigência</p>
-
-        <input
-          type="date"
-          value={fimVigencia}
-          onChange={(e) =>
-            setFimVigencia(e.target.value)
-          }
-        />
-
-        <hr />
-
-        <h3>💼 Pagamento do Profissional</h3>
-
-        <p style={{ maxWidth: 650, color: "#555" }}>
-          O pagamento do profissional será controlado dentro do Financeiro deste contrato.
-          Você informa o valor total e a quantidade de parcelas semanais na hora de gerar os pagamentos.
-        </p>
-
-        <hr />
-
-        <h3>📌 Informações Adicionais</h3>
-
-        <p>Grupo WhatsApp</p>
-
-        <input
-          value={grupoWhatsapp}
-          onChange={(e) =>
-            setGrupoWhatsapp(e.target.value)
-          }
-          style={{ width: 400, padding: 8 }}
-        />
-
-        <p>Pasta de Documentos</p>
-
-        <input
-          value={pastaDocumentos}
-          onChange={(e) =>
-            setPastaDocumentos(e.target.value)
-          }
-          style={{ width: 400, padding: 8 }}
-        />
-
-        <p>Consultor</p>
-
-        <input
-          value={consultor}
-          onChange={(e) => setConsultor(e.target.value)}
-          style={{ width: 300, padding: 8 }}
-        />
-
-        <p>Observações</p>
-
-        <textarea
-          value={observacoes}
-          onChange={(e) =>
-            setObservacoes(e.target.value)
-          }
-          rows={4}
-          style={{ width: 500, padding: 8 }}
-        />
-
-        <br />
-        <br />
+        <div>
+          <h2 style={{ margin: 0, fontSize: 26 }}>👥 Clientes</h2>
+          <p style={{ margin: "6px 0 0", color: "#64748b" }}>
+            Cadastro, contratos e acompanhamento financeiro em um só lugar.
+          </p>
+        </div>
 
         <button
-          onClick={salvar}
-          disabled={carregando}
+          onClick={() => {
+            if (mostrarFormulario) {
+              limparFormulario();
+            } else {
+              setId(undefined);
+              setMostrarFormulario(true);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }
+          }}
           style={{
-            padding: "10px 20px",
             background: "#2563eb",
             color: "#fff",
             border: "none",
-            borderRadius: 6,
+            borderRadius: 8,
+            padding: "12px 18px",
+            fontWeight: "bold",
+            fontSize: 15,
             cursor: "pointer",
           }}
         >
-          {carregando
-            ? "Salvando..."
-            : id
-            ? "Atualizar Cliente"
-            : "Salvar Cliente"}
+          ➕ {id ? "Novo Cliente" : "Novo Cliente"}
         </button>
-
-        {id && (
-          <button
-            style={{
-              marginLeft: 10,
-              padding: "10px 20px",
-            }}
-            onClick={limparFormulario}
-          >
-            Cancelar
-          </button>
-        )}
       </div>
 
+      {/* RESUMO */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+          gap: 12,
+          marginBottom: 18,
+        }}
+      >
+        <div style={{ background: "#fff", borderRadius: 10, padding: 16, boxShadow: "0 2px 8px rgba(0,0,0,.06)" }}>
+          <div style={{ color: "#64748b", fontSize: 13 }}>CLIENTES</div>
+          <strong style={{ fontSize: 24 }}>{clientes.length}</strong>
+        </div>
+
+        <div style={{ background: "#fff", borderRadius: 10, padding: 16, boxShadow: "0 2px 8px rgba(0,0,0,.06)" }}>
+          <div style={{ color: "#64748b", fontSize: 13 }}>TOTAL DOS CONTRATOS</div>
+          <strong style={{ fontSize: 21 }}>{formatarMoeda(totalContratos)}</strong>
+        </div>
+
+        <div style={{ background: "#ecfdf5", borderRadius: 10, padding: 16, boxShadow: "0 2px 8px rgba(0,0,0,.06)" }}>
+          <div style={{ color: "#15803d", fontSize: 13 }}>RECEBIDO</div>
+          <strong style={{ fontSize: 21, color: "#15803d" }}>{formatarMoeda(totalRecebido)}</strong>
+        </div>
+
+        <div style={{ background: "#fff7ed", borderRadius: 10, padding: 16, boxShadow: "0 2px 8px rgba(0,0,0,.06)" }}>
+          <div style={{ color: "#b45309", fontSize: 13 }}>A RECEBER</div>
+          <strong style={{ fontSize: 21, color: "#b45309" }}>{formatarMoeda(totalAberto)}</strong>
+        </div>
+      </div>
+
+      {/* FORMULÁRIO: SÓ APARECE QUANDO FOR NOVO/EDIÇÃO */}
+      {mostrarFormulario && (
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: 12,
+            padding: 20,
+            marginBottom: 18,
+            boxShadow: "0 2px 10px rgba(0,0,0,.08)",
+            border: "1px solid #e5e7eb",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              marginBottom: 18,
+            }}
+          >
+            <div>
+              <h3 style={{ margin: 0 }}>{id ? "✏️ Editar Cliente" : "➕ Novo Cliente"}</h3>
+              <small style={{ color: "#64748b" }}>
+                Preencha os dados do cliente e do contrato.
+              </small>
+            </div>
+
+            <button
+              onClick={limparFormulario}
+              style={{
+                border: "1px solid #cbd5e1",
+                background: "#fff",
+                borderRadius: 7,
+                padding: "8px 12px",
+                cursor: "pointer",
+              }}
+            >
+              ✖ Fechar
+            </button>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              gap: 12,
+            }}
+          >
+            <label>
+              <span>Nº da Proposta</span>
+              <input
+                value={proposta}
+                onChange={(e) => setProposta(e.target.value)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label style={{ gridColumn: "span 2" }}>
+              <span>Instituição</span>
+              <input
+                value={instituicao}
+                onChange={(e) => setInstituicao(e.target.value)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label>
+              <span>Responsável</span>
+              <input
+                value={responsavel}
+                onChange={(e) => setResponsavel(e.target.value)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label>
+              <span>Telefone</span>
+              <input
+                value={telefone}
+                onChange={(e) => setTelefone(e.target.value)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label style={{ gridColumn: "span 2" }}>
+              <span>E-mail</span>
+              <input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                style={inputStyle}
+              />
+            </label>
+          </div>
+
+          <hr style={{ margin: "20px 0", border: 0, borderTop: "1px solid #e5e7eb" }} />
+
+          <h3 style={{ margin: "0 0 12px" }}>📄 Contrato</h3>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+              gap: 12,
+            }}
+          >
+            <label>
+              <span>Nº do Contrato</span>
+              <input value={contrato} onChange={(e) => setContrato(e.target.value)} style={inputStyle} />
+            </label>
+
+            <label>
+              <span>Valor da Parcela</span>
+              <input
+                type="text"
+                value={valorParcela}
+                onChange={(e) => setValorParcela(e.target.value)}
+                placeholder="Ex.: 3.750,00"
+                style={inputStyle}
+              />
+            </label>
+
+            <label>
+              <span>Quantidade de Parcelas</span>
+              <input
+                type="number"
+                value={quantidadeParcelas}
+                onChange={(e) => setQuantidadeParcelas(e.target.value)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label>
+              <span>Parcela Atual</span>
+              <input
+                value={parcelaAtual}
+                onChange={(e) => setParcelaAtual(e.target.value)}
+                placeholder="Ex.: 1/12"
+                style={inputStyle}
+              />
+            </label>
+
+            <label>
+              <span>Dia do Vencimento</span>
+              <input
+                type="number"
+                value={diaVencimento}
+                onChange={(e) => setDiaVencimento(e.target.value)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label>
+              <span>Início da Vigência</span>
+              <input
+                type="date"
+                value={inicioVigencia}
+                onChange={(e) => setInicioVigencia(e.target.value)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label>
+              <span>Fim da Vigência</span>
+              <input
+                type="date"
+                value={fimVigencia}
+                onChange={(e) => setFimVigencia(e.target.value)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label>
+              <span>Consultor</span>
+              <input
+                value={consultor}
+                onChange={(e) => setConsultor(e.target.value)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label>
+              <span>Grupo WhatsApp</span>
+              <input
+                value={grupoWhatsapp}
+                onChange={(e) => setGrupoWhatsapp(e.target.value)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label style={{ gridColumn: "span 2" }}>
+              <span>Pasta de Documentos</span>
+              <input
+                value={pastaDocumentos}
+                onChange={(e) => setPastaDocumentos(e.target.value)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label style={{ gridColumn: "1 / -1" }}>
+              <span>Observações</span>
+              <textarea
+                value={observacoes}
+                onChange={(e) => setObservacoes(e.target.value)}
+                rows={3}
+                style={{ ...inputStyle, resize: "vertical" }}
+              />
+            </label>
+          </div>
+
+          <div style={{ marginTop: 18, display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              onClick={salvar}
+              disabled={carregando}
+              style={{
+                background: "#2563eb",
+                color: "#fff",
+                border: "none",
+                borderRadius: 7,
+                padding: "10px 18px",
+                fontWeight: "bold",
+                cursor: "pointer",
+              }}
+            >
+              {carregando ? "Salvando..." : id ? "Atualizar Cliente" : "Salvar Cliente"}
+            </button>
+
+            {id && (
+              <button
+                onClick={limparFormulario}
+                style={{
+                  background: "#fff",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 7,
+                  padding: "10px 18px",
+                  cursor: "pointer",
+                }}
+              >
+                Cancelar
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* LISTA PRINCIPAL */}
       <div
         style={{
           background: "#fff",
-          padding: 20,
           borderRadius: 12,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+          padding: 20,
+          boxShadow: "0 2px 10px rgba(0,0,0,.08)",
+          border: "1px solid #e5e7eb",
         }}
       >
-        <h2>👥 Clientes Cadastrados</h2>
-
-        <input
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          placeholder="🔎 Pesquisar instituição, proposta, responsável ou consultor..."
+        <div
           style={{
-            width: "100%",
-            maxWidth: 600,
-            padding: 12,
-            marginBottom: 20,
-            border: "1px solid #ccc",
-            borderRadius: 8,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+            marginBottom: 15,
           }}
-        />
+        >
+          <div>
+            <h2 style={{ margin: 0 }}>📋 Clientes cadastrados</h2>
+            <small style={{ color: "#64748b" }}>
+              {clientesExibidos.length} cliente(s) encontrado(s)
+            </small>
+          </div>
 
-        {clientesFiltrados.length === 0 ? (
-          <p>Nenhum cliente encontrado.</p>
-        ) : (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flex: 1, justifyContent: "flex-end" }}>
+            <input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="🔎 Pesquisar instituição, proposta, responsável ou consultor..."
+              style={{
+                width: "min(600px, 100%)",
+                minWidth: 260,
+                padding: 11,
+                border: "1px solid #cbd5e1",
+                borderRadius: 8,
+              }}
+            />
+          </div>
+        </div>
+
+        {clientesExibidos.length === 0 ? (
           <div
             style={{
-              overflowX: "auto",
+              padding: 35,
+              textAlign: "center",
+              background: "#f8fafc",
+              borderRadius: 10,
+              color: "#64748b",
             }}
           >
+            {clientes.length === 0
+              ? "Nenhum cliente cadastrado. Clique em “Novo Cliente” para começar."
+              : "Nenhum cliente encontrado para esta pesquisa."}
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
             <table
               style={{
                 width: "100%",
                 borderCollapse: "collapse",
-                minWidth: 950,
+                minWidth: 1050,
               }}
             >
               <thead>
-                <tr
-                  style={{
-                    background: "#1f2937",
-                    color: "#fff",
-                  }}
-                >
-                  <th style={{ padding: 12 }}>Proposta</th>
-                  <th style={{ padding: 12 }}>Cliente</th>
-                  <th style={{ padding: 12 }}>Consultor</th>
-                  <th style={{ padding: 12 }}>Contrato</th>
-                  <th style={{ padding: 12 }}>Parcelas</th>
-                  <th style={{ padding: 12 }}>Recebido</th>
-                  <th style={{ padding: 12 }}>A receber</th>
-                  <th style={{ padding: 12 }}>Ações</th>
+                <tr style={{ background: "#1f2937", color: "#fff" }}>
+                  <th style={thStyle}>Proposta</th>
+                  <th style={thStyle}>Cliente</th>
+                  <th style={thStyle}>Consultor</th>
+                  <th style={thStyle}>Contrato</th>
+                  <th style={thStyle}>Parcelas</th>
+                  <th style={thStyle}>Recebido</th>
+                  <th style={thStyle}>A receber</th>
+                  <th style={thStyle}>Ações</th>
                 </tr>
               </thead>
 
               <tbody>
-                {clientesFiltrados.map((cliente) => {
+                {clientesExibidos.map((cliente) => {
                   const resumo = resumoCliente(cliente);
 
                   return (
-                    <tr
-                      key={cliente.id}
-                      style={{
-                        borderBottom: "1px solid #ddd",
-                      }}
-                    >
-                      <td style={{ padding: 12 }}>
+                    <tr key={cliente.id} style={{ borderBottom: "1px solid #e5e7eb" }}>
+                      <td style={tdStyle}>
                         <strong>{cliente.proposta}</strong>
                       </td>
 
-                      <td style={{ padding: 12 }}>
-                        <strong>
-                          {cliente.instituicao}
-                        </strong>
+                      <td style={tdStyle}>
+                        <strong>{cliente.instituicao}</strong>
                         <br />
-                        <small>
-                          {cliente.responsavel}
-                        </small>
+                        <small style={{ color: "#64748b" }}>{cliente.responsavel || "-"}</small>
                       </td>
 
-                      <td style={{ padding: 12 }}>
-                        {cliente.consultor || "-"}
+                      <td style={tdStyle}>{cliente.consultor || "-"}</td>
+
+                      <td style={tdStyle}>
+                        <strong>{formatarMoeda(resumo.total)}</strong>
                       </td>
 
-                      <td style={{ padding: 12 }}>
-                        {formatarMoeda(resumo.total)}
-                      </td>
-
-                      <td style={{ padding: 12 }}>
-                        🟢 {resumo.pagas} pagas
-                        <br />
-                        🟠 {resumo.abertas} abertas
+                      <td style={tdStyle}>
+                        <span style={{ color: "#15803d", fontWeight: "bold" }}>
+                          🟢 {resumo.pagas}
+                        </span>{" "}
+                        /{" "}
+                        <span style={{ color: "#b45309", fontWeight: "bold" }}>
+                          🟠 {resumo.abertas}
+                        </span>
                         {resumo.atrasadas > 0 && (
                           <>
-                            <br />
-                            🔴 {resumo.atrasadas} atrasadas
+                            {" "}
+                            /{" "}
+                            <span style={{ color: "#dc2626", fontWeight: "bold" }}>
+                              🔴 {resumo.atrasadas}
+                            </span>
                           </>
                         )}
                       </td>
 
-                      <td
-                        style={{
-                          padding: 12,
-                          color: "#15803d",
-                          fontWeight: "bold",
-                        }}
-                      >
+                      <td style={{ ...tdStyle, color: "#15803d", fontWeight: "bold" }}>
                         {formatarMoeda(resumo.recebido)}
                       </td>
 
-                      <td
-                        style={{
-                          padding: 12,
-                          color: "#b45309",
-                          fontWeight: "bold",
-                        }}
-                      >
+                      <td style={{ ...tdStyle, color: "#b45309", fontWeight: "bold" }}>
                         {formatarMoeda(resumo.aberto)}
                       </td>
 
-                      <td style={{ padding: 12 }}>
+                      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
                         <button
-                          onClick={() =>
-                            setClienteSelecionado(cliente)
-                          }
+                          onClick={() => setClienteSelecionado(cliente)}
                           style={{
                             background: "#2563eb",
                             color: "#fff",
                             border: "none",
-                            borderRadius: 5,
+                            borderRadius: 6,
                             padding: "7px 10px",
-                            marginRight: 5,
                             cursor: "pointer",
+                            marginRight: 5,
                           }}
                         >
                           💰 Financeiro
@@ -1055,17 +1178,16 @@ export default function Clientes() {
 
                         <button
                           onClick={() => editar(cliente)}
-                          style={{
-                            marginRight: 5,
-                          }}
+                          title="Editar cliente"
+                          style={{ padding: "7px 9px", marginRight: 5, cursor: "pointer" }}
                         >
                           ✏️
                         </button>
 
                         <button
-                          onClick={() =>
-                            excluir(cliente.id!)
-                          }
+                          onClick={() => excluir(cliente.id!)}
+                          title="Excluir cliente"
+                          style={{ padding: "7px 9px", cursor: "pointer" }}
                         >
                           🗑️
                         </button>
@@ -1079,14 +1201,16 @@ export default function Clientes() {
         )}
       </div>
 
+      {/* FINANCEIRO DO CLIENTE SELECIONADO */}
       {clienteSelecionado && resumoSelecionado && (
         <div
           style={{
-            marginTop: 25,
+            marginTop: 18,
             background: "#fff",
-            padding: 25,
+            padding: 20,
             borderRadius: 12,
-            boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
+            boxShadow: "0 2px 10px rgba(0,0,0,.10)",
+            border: "1px solid #e5e7eb",
           }}
         >
           <div
@@ -1095,123 +1219,71 @@ export default function Clientes() {
               justifyContent: "space-between",
               alignItems: "center",
               gap: 15,
+              flexWrap: "wrap",
             }}
           >
             <div>
-              <h2>
-                💰 Financeiro —{" "}
-                {clienteSelecionado.instituicao}
+              <h2 style={{ margin: 0 }}>
+                💰 Financeiro — {clienteSelecionado.instituicao}
               </h2>
-
-              <p>
-                Proposta:{" "}
-                <strong>
-                  {clienteSelecionado.proposta}
-                </strong>
+              <p style={{ margin: "5px 0", color: "#64748b" }}>
+                Proposta: <strong>{clienteSelecionado.proposta}</strong>
               </p>
             </div>
 
             <button
-              onClick={() =>
-                setClienteSelecionado(null)
-              }
+              onClick={() => setClienteSelecionado(null)}
+              style={{
+                border: "1px solid #cbd5e1",
+                background: "#fff",
+                borderRadius: 7,
+                padding: "8px 12px",
+                cursor: "pointer",
+              }}
             >
-              ✖ Fechar
+              ✖ Fechar financeiro
             </button>
           </div>
 
           <div
             style={{
               display: "grid",
-              gridTemplateColumns:
-                "repeat(auto-fit, minmax(180px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
               gap: 12,
-              marginTop: 20,
+              marginTop: 18,
             }}
           >
-            <div
-              style={{
-                padding: 18,
-                background: "#eef2ff",
-                borderRadius: 10,
-              }}
-            >
-              <strong>Total do contrato</strong>
+            <div style={{ padding: 16, background: "#eef2ff", borderRadius: 10 }}>
+              <small>Total do contrato</small>
+              <h3>{formatarMoeda(resumoSelecionado.total)}</h3>
+            </div>
+
+            <div style={{ padding: 16, background: "#ecfdf5", borderRadius: 10 }}>
+              <small>Recebido</small>
+              <h3 style={{ color: "#15803d" }}>{formatarMoeda(resumoSelecionado.recebido)}</h3>
+            </div>
+
+            <div style={{ padding: 16, background: "#fff7ed", borderRadius: 10 }}>
+              <small>A receber</small>
+              <h3 style={{ color: "#b45309" }}>{formatarMoeda(resumoSelecionado.aberto)}</h3>
+            </div>
+
+            <div style={{ padding: 16, background: "#f3f4f6", borderRadius: 10 }}>
+              <small>Situação</small>
               <h3>
-                {formatarMoeda(resumoSelecionado.total)}
-              </h3>
-            </div>
-
-            <div
-              style={{
-                padding: 18,
-                background: "#ecfdf5",
-                borderRadius: 10,
-              }}
-            >
-              <strong>Recebido</strong>
-              <h3
-                style={{
-                  color: "#15803d",
-                }}
-              >
-                {formatarMoeda(
-                  resumoSelecionado.recebido
-                )}
-              </h3>
-            </div>
-
-            <div
-              style={{
-                padding: 18,
-                background: "#fff7ed",
-                borderRadius: 10,
-              }}
-            >
-              <strong>A receber</strong>
-              <h3
-                style={{
-                  color: "#b45309",
-                }}
-              >
-                {formatarMoeda(
-                  resumoSelecionado.aberto
-                )}
-              </h3>
-            </div>
-
-            <div
-              style={{
-                padding: 18,
-                background: "#f3f4f6",
-                borderRadius: 10,
-              }}
-            >
-              <strong>Situação</strong>
-              <h3>
-                {resumoSelecionado.pagas}/
-                {clienteSelecionado.quantidade_parcelas}
+                {resumoSelecionado.pagas}/{clienteSelecionado.quantidade_parcelas}
               </h3>
               <small>parcelas pagas</small>
             </div>
           </div>
 
-          <hr />
+          <hr style={{ margin: "20px 0", border: 0, borderTop: "1px solid #e5e7eb" }} />
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 15,
-              flexWrap: "wrap",
-            }}
-          >
-            <h3>📋 Parcelas</h3>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <h3 style={{ margin: 0 }}>📋 Parcelas</h3>
 
             <button
-              onClick={() =>
-                gerarParcelas(clienteSelecionado)
-              }
+              onClick={() => gerarParcelas(clienteSelecionado)}
               disabled={carregando}
               style={{
                 background: "#2563eb",
@@ -1227,217 +1299,95 @@ export default function Clientes() {
           </div>
 
           {resumoSelecionado.parcelas.length === 0 ? (
-            <div
-              style={{
-                padding: 20,
-                background: "#f9fafb",
-                borderRadius: 8,
-              }}
-            >
-              <p>
-                Nenhuma parcela foi gerada ainda.
-              </p>
-
-              <p>
-                Clique em{" "}
-                <strong>Gerar parcelas</strong> para
-                criar automaticamente as parcelas do
-                contrato.
+            <div style={{ padding: 20, background: "#f8fafc", borderRadius: 8, marginTop: 12 }}>
+              <p style={{ marginTop: 0 }}>Nenhuma parcela foi gerada ainda.</p>
+              <p style={{ marginBottom: 0 }}>
+                Clique em <strong>Gerar parcelas</strong> para criar automaticamente as parcelas do contrato.
               </p>
             </div>
           ) : (
-            <div
-              style={{
-                overflowX: "auto",
-              }}
-            >
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  minWidth: 800,
-                }}
-              >
+            <div style={{ overflowX: "auto", marginTop: 12 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 800 }}>
                 <thead>
-                  <tr
-                    style={{
-                      background: "#f3f4f6",
-                    }}
-                  >
-                    <th style={{ padding: 10 }}>
-                      Parcela
-                    </th>
-                    <th style={{ padding: 10 }}>
-                      Valor
-                    </th>
-                    <th style={{ padding: 10 }}>
-                      Vencimento
-                    </th>
-                    <th style={{ padding: 10 }}>
-                      Status
-                    </th>
-                    <th style={{ padding: 10 }}>
-                      Pagamento
-                    </th>
-                    <th style={{ padding: 10 }}>
-                      Ação
-                    </th>
+                  <tr style={{ background: "#f3f4f6" }}>
+                    <th style={thStyle}>Parcela</th>
+                    <th style={thStyle}>Valor</th>
+                    <th style={thStyle}>Vencimento</th>
+                    <th style={thStyle}>Status</th>
+                    <th style={thStyle}>Pagamento</th>
+                    <th style={thStyle}>Ação</th>
                   </tr>
                 </thead>
-
                 <tbody>
-                  {resumoSelecionado.parcelas.map(
-                    (item) => {
-                      const recebida =
-                        item.status.toLowerCase() ===
-                          "recebido" ||
-                        item.status.toLowerCase() ===
-                          "pago";
+                  {resumoSelecionado.parcelas.map((item) => {
+                    const recebida =
+                      item.status.toLowerCase() === "recebido" ||
+                      item.status.toLowerCase() === "pago";
 
-                      return (
-                        <tr
-                          key={item.id}
-                          style={{
-                            borderBottom:
-                              "1px solid #ddd",
-                          }}
-                        >
-                          <td
-                            style={{
-                              padding: 10,
-                              fontWeight: "bold",
-                            }}
-                          >
-                            {item.parcela}
-                          </td>
-
-                          <td style={{ padding: 10 }}>
-                            {formatarMoeda(item.valor)}
-                          </td>
-
-                          <td style={{ padding: 10 }}>
-                            {formatarData(
-                              item.vencimento
-                            )}
-                          </td>
-
-                          <td style={{ padding: 10 }}>
-                            {recebida ? (
-                              <span
-                                style={{
-                                  color: "#15803d",
-                                  fontWeight: "bold",
-                                }}
-                              >
-                                🟢 Recebido
-                              </span>
-                            ) : item.status
-                                .toLowerCase() ===
-                              "atrasado" ? (
-                              <span
-                                style={{
-                                  color: "#dc2626",
-                                  fontWeight: "bold",
-                                }}
-                              >
-                                🔴 Atrasado
-                              </span>
-                            ) : (
-                              <span
-                                style={{
-                                  color: "#b45309",
-                                  fontWeight: "bold",
-                                }}
-                              >
-                                🟠 Em Aberto
-                              </span>
-                            )}
-                          </td>
-
-                          <td style={{ padding: 10 }}>
-                            {item.data_pagamento
-                              ? formatarData(
-                                  item.data_pagamento
-                                )
-                              : "-"}
-                          </td>
-
-                          <td style={{ padding: 10 }}>
-                            {recebida ? (
-                              <button
-                                onClick={() =>
-                                  reabrirParcela(item)
-                                }
-                              >
-                                ↩ Reabrir
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() =>
-                                  darBaixaParcela(
-                                    item
-                                  )
-                                }
-                                style={{
-                                  background:
-                                    "#16a34a",
-                                  color: "#fff",
-                                  border: "none",
-                                  borderRadius: 5,
-                                  padding:
-                                    "7px 10px",
-                                  cursor: "pointer",
-                                }}
-                              >
-                                ✅ Dar baixa
-                              </button>
-                            )}
-
+                    return (
+                      <tr key={item.id} style={{ borderBottom: "1px solid #e5e7eb" }}>
+                        <td style={tdStyle}><strong>{item.parcela}</strong></td>
+                        <td style={tdStyle}>{formatarMoeda(item.valor)}</td>
+                        <td style={tdStyle}>{formatarData(item.vencimento)}</td>
+                        <td style={tdStyle}>
+                          {recebida ? (
+                            <span style={{ color: "#15803d", fontWeight: "bold" }}>🟢 Recebido</span>
+                          ) : item.status.toLowerCase() === "atrasado" ? (
+                            <span style={{ color: "#dc2626", fontWeight: "bold" }}>🔴 Atrasado</span>
+                          ) : (
+                            <span style={{ color: "#b45309", fontWeight: "bold" }}>🟠 Em Aberto</span>
+                          )}
+                        </td>
+                        <td style={tdStyle}>
+                          {item.data_pagamento ? formatarData(item.data_pagamento) : "-"}
+                        </td>
+                        <td style={tdStyle}>
+                          {recebida ? (
+                            <button onClick={() => reabrirParcela(item)}>↩ Reabrir</button>
+                          ) : (
                             <button
-                              onClick={async () => {
-                                if (
-                                  !item.id ||
-                                  !confirm(
-                                    `Excluir a parcela ${item.parcela}?`
-                                  )
-                                )
-                                  return;
-
-                                try {
-                                  await excluirParcela(
-                                    item.id
-                                  );
-                                  await carregarDados();
-                                } catch (error) {
-                                  console.error(
-                                    error
-                                  );
-                                  alert(
-                                    "Erro ao excluir parcela."
-                                  );
-                                }
-                              }}
+                              onClick={() => darBaixaParcela(item)}
                               style={{
-                                marginLeft: 5,
+                                background: "#16a34a",
+                                color: "#fff",
+                                border: "none",
+                                borderRadius: 5,
+                                padding: "7px 10px",
+                                cursor: "pointer",
                               }}
                             >
-                              🗑️
+                              ✅ Dar baixa
                             </button>
-                          </td>
-                        </tr>
-                      );
-                    }
-                  )}
+                          )}
+
+                          <button
+                            onClick={async () => {
+                              if (!item.id || !confirm(`Excluir a parcela ${item.parcela}?`)) return;
+                              try {
+                                await excluirParcela(item.id);
+                                await carregarDados();
+                              } catch (error) {
+                                console.error(error);
+                                alert("Erro ao excluir parcela.");
+                              }
+                            }}
+                            style={{ marginLeft: 5 }}
+                          >
+                            🗑️
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
 
-          <hr />
+          <hr style={{ margin: "20px 0", border: 0, borderTop: "1px solid #e5e7eb" }} />
 
           <h3>💼 Pagamento do Profissional</h3>
-
-          <p>
+          <p style={{ color: "#64748b" }}>
             <strong>Profissional:</strong>{" "}
             {clienteSelecionado.consultor || "Não informado"}
           </p>
@@ -1445,19 +1395,12 @@ export default function Clientes() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns:
-                "repeat(auto-fit, minmax(180px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
               gap: 12,
               marginBottom: 15,
             }}
           >
-            <div
-              style={{
-                padding: 15,
-                background: "#eef2ff",
-                borderRadius: 8,
-              }}
-            >
+            <div style={{ padding: 15, background: "#eef2ff", borderRadius: 8 }}>
               <strong>Total do profissional</strong>
               <h3>
                 {formatarMoeda(
@@ -1469,46 +1412,26 @@ export default function Clientes() {
               </h3>
             </div>
 
-            <div
-              style={{
-                padding: 15,
-                background: "#dcfce7",
-                borderRadius: 8,
-              }}
-            >
+            <div style={{ padding: 15, background: "#dcfce7", borderRadius: 8 }}>
               <strong>Total pago</strong>
-              <h3 style={{ color: "#15803d" }}>
-                {formatarMoeda(totalComissaoPaga)}
-              </h3>
+              <h3 style={{ color: "#15803d" }}>{formatarMoeda(totalComissaoPaga)}</h3>
             </div>
 
-            <div
-              style={{
-                padding: 15,
-                background: "#fff7ed",
-                borderRadius: 8,
-              }}
-            >
+            <div style={{ padding: 15, background: "#fff7ed", borderRadius: 8 }}>
               <strong>Total em aberto</strong>
-              <h3 style={{ color: "#b45309" }}>
-                {formatarMoeda(totalComissaoAberta)}
-              </h3>
+              <h3 style={{ color: "#b45309" }}>{formatarMoeda(totalComissaoAberta)}</h3>
             </div>
 
-            <div
-              style={{
-                padding: 15,
-                background: "#f3f4f6",
-                borderRadius: 8,
-              }}
-            >
+            <div style={{ padding: 15, background: "#f3f4f6", borderRadius: 8 }}>
               <strong>Situação</strong>
               <h3>
-                {comissoesSelecionadas.filter(
-                  (item) =>
-                    item.status.toLowerCase() === "pago" ||
-                    item.status.toLowerCase() === "recebido"
-                ).length}
+                {
+                  comissoesSelecionadas.filter(
+                    (item) =>
+                      item.status.toLowerCase() === "pago" ||
+                      item.status.toLowerCase() === "recebido"
+                  ).length
+                }
                 /{comissoesSelecionadas.length}
               </h3>
               <small>pagamentos feitos</small>
@@ -1532,40 +1455,25 @@ export default function Clientes() {
           </button>
 
           {comissoesSelecionadas.length === 0 ? (
-            <div
-              style={{
-                padding: 20,
-                background: "#f9fafb",
-                borderRadius: 8,
-              }}
-            >
-              <p>
-                Nenhum pagamento do profissional foi gerado ainda.
-              </p>
-              <p>
-                Clique em <strong>Gerar pagamentos do profissional</strong> para informar o valor total e a quantidade de parcelas semanais.
+            <div style={{ padding: 20, background: "#f8fafc", borderRadius: 8 }}>
+              <p>Nenhum pagamento do profissional foi gerado ainda.</p>
+              <p style={{ marginBottom: 0 }}>
+                Informe o valor total e a quantidade de parcelas semanais para gerar os pagamentos.
               </p>
             </div>
           ) : (
             <div style={{ overflowX: "auto", marginTop: 10 }}>
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  minWidth: 800,
-                }}
-              >
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 800 }}>
                 <thead>
                   <tr style={{ background: "#f3f4f6" }}>
-                    <th style={{ padding: 10 }}>Parcela</th>
-                    <th style={{ padding: 10 }}>Valor</th>
-                    <th style={{ padding: 10 }}>Vencimento</th>
-                    <th style={{ padding: 10 }}>Status</th>
-                    <th style={{ padding: 10 }}>Pagamento</th>
-                    <th style={{ padding: 10 }}>Ação</th>
+                    <th style={thStyle}>Parcela</th>
+                    <th style={thStyle}>Valor</th>
+                    <th style={thStyle}>Vencimento</th>
+                    <th style={thStyle}>Status</th>
+                    <th style={thStyle}>Pagamento</th>
+                    <th style={thStyle}>Ação</th>
                   </tr>
                 </thead>
-
                 <tbody>
                   {comissoesSelecionadas.map((comissao) => {
                     const paga =
@@ -1573,62 +1481,23 @@ export default function Clientes() {
                       comissao.status.toLowerCase() === "recebido";
 
                     return (
-                      <tr
-                        key={comissao.id}
-                        style={{ borderBottom: "1px solid #ddd" }}
-                      >
-                        <td
-                          style={{
-                            padding: 10,
-                            fontWeight: "bold",
-                          }}
-                        >
-                          {comissao.parcela}
-                        </td>
-
-                        <td style={{ padding: 10 }}>
-                          {formatarMoeda(comissao.valor)}
-                        </td>
-
-                        <td style={{ padding: 10 }}>
-                          {formatarData(comissao.vencimento)}
-                        </td>
-
-                        <td style={{ padding: 10 }}>
+                      <tr key={comissao.id} style={{ borderBottom: "1px solid #e5e7eb" }}>
+                        <td style={tdStyle}><strong>{comissao.parcela}</strong></td>
+                        <td style={tdStyle}>{formatarMoeda(comissao.valor)}</td>
+                        <td style={tdStyle}>{formatarData(comissao.vencimento)}</td>
+                        <td style={tdStyle}>
                           {paga ? (
-                            <span
-                              style={{
-                                color: "#15803d",
-                                fontWeight: "bold",
-                              }}
-                            >
-                              🟢 Pago
-                            </span>
+                            <span style={{ color: "#15803d", fontWeight: "bold" }}>🟢 Pago</span>
                           ) : (
-                            <span
-                              style={{
-                                color: "#b45309",
-                                fontWeight: "bold",
-                              }}
-                            >
-                              🟠 Em Aberto
-                            </span>
+                            <span style={{ color: "#b45309", fontWeight: "bold" }}>🟠 Em Aberto</span>
                           )}
                         </td>
-
-                        <td style={{ padding: 10 }}>
-                          {comissao.data_pagamento
-                            ? formatarData(comissao.data_pagamento)
-                            : "-"}
+                        <td style={tdStyle}>
+                          {comissao.data_pagamento ? formatarData(comissao.data_pagamento) : "-"}
                         </td>
-
-                        <td style={{ padding: 10 }}>
+                        <td style={tdStyle}>
                           {paga ? (
-                            <button
-                              onClick={() => reabrirComissao(comissao)}
-                            >
-                              ↩ Reabrir
-                            </button>
+                            <button onClick={() => reabrirComissao(comissao)}>↩ Reabrir</button>
                           ) : (
                             <button
                               onClick={() => darBaixaComissao(comissao)}
@@ -1666,3 +1535,24 @@ export default function Clientes() {
     </div>
   );
 }
+
+const inputStyle: CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "10px 11px",
+  marginTop: 5,
+  border: "1px solid #cbd5e1",
+  borderRadius: 7,
+  background: "#fff",
+};
+
+const thStyle: CSSProperties = {
+  padding: 11,
+  textAlign: "left",
+  whiteSpace: "nowrap",
+};
+
+const tdStyle: CSSProperties = {
+  padding: 11,
+  verticalAlign: "middle",
+};
