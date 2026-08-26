@@ -5,6 +5,12 @@ type Status = "todo" | "in_progress" | "done";
 type Priority = "none" | "low" | "medium" | "high" | "urgent";
 type TaskType = "task" | "appointment" | "call" | "follow_up";
 
+type Documento = {
+  id: string;
+  titulo: string;
+  entregue: boolean;
+};
+
 type Tarefa = {
   id: string;
   user_id: string;
@@ -20,6 +26,10 @@ type Tarefa = {
   is_important: boolean;
   is_urgent: boolean;
   task_type: TaskType;
+  grupo_numero: string | null;
+  proposta_numero: string | null;
+  instrumento_numero: string | null;
+  documentos: Documento[] | null;
 };
 
 function dataLocal(date = new Date()) {
@@ -118,11 +128,28 @@ export default function Tarefas() {
 
   const [horario, setHorario] = useState("");
 
+  const [grupoNumero, setGrupoNumero] = useState("");
+  const [propostaNumero, setPropostaNumero] = useState("");
+  const [instrumentoNumero, setInstrumentoNumero] = useState("");
+  const [documentos, setDocumentos] = useState<Documento[]>([]);
+  const [novoDocumento, setNovoDocumento] = useState("");
+
   const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [anotacoesAcompanhamento, setAnotacoesAcompanhamento] = useState("");
 
   useEffect(() => {
     carregarTarefas();
+
+    const salvo = localStorage.getItem("tarefas_acompanhamento");
+    if (salvo) {
+      setAnotacoesAcompanhamento(salvo);
+    }
   }, []);
+
+  function salvarAcompanhamento() {
+    localStorage.setItem("tarefas_acompanhamento", anotacoesAcompanhamento);
+    alert("Acompanhamento salvo com sucesso!");
+  }
 
   async function carregarTarefas() {
     try {
@@ -181,6 +208,10 @@ export default function Tarefas() {
               prioridade === "urgent",
             is_urgent:
               prioridade === "urgent",
+            grupo_numero: grupoNumero.trim() || null,
+            proposta_numero: propostaNumero.trim() || null,
+            instrumento_numero: instrumentoNumero.trim() || null,
+            documentos,
           },
         ]);
 
@@ -210,6 +241,11 @@ export default function Tarefas() {
     setTipo(tarefa.task_type);
     setDataPrazo(tarefa.due_date || hoje);
     setHorario(tarefa.due_time || "");
+    setGrupoNumero(tarefa.grupo_numero || "");
+    setPropostaNumero(tarefa.proposta_numero || "");
+    setInstrumentoNumero(tarefa.instrumento_numero || "");
+    setDocumentos(tarefa.documentos || []);
+    setNovoDocumento("");
     setMostrarFormulario(true);
     setMostrarHistorico(false);
   }
@@ -237,6 +273,10 @@ export default function Tarefas() {
             prioridade === "urgent",
           is_urgent:
             prioridade === "urgent",
+          grupo_numero: grupoNumero.trim() || null,
+          proposta_numero: propostaNumero.trim() || null,
+          instrumento_numero: instrumentoNumero.trim() || null,
+          documentos,
           updated_at: new Date().toISOString(),
         })
         .eq("id", editandoId);
@@ -362,6 +402,35 @@ export default function Tarefas() {
     setTipo("task");
     setDataPrazo(hoje);
     setHorario("");
+  }
+
+  function adicionarDocumento() {
+    const titulo = novoDocumento.trim();
+    if (!titulo) return;
+
+    setDocumentos((lista) => [
+      ...lista,
+      {
+        id: crypto.randomUUID(),
+        titulo,
+        entregue: false,
+      },
+    ]);
+    setNovoDocumento("");
+  }
+
+  function alternarDocumento(id: string) {
+    setDocumentos((lista) =>
+      lista.map((documento) =>
+        documento.id === id
+          ? { ...documento, entregue: !documento.entregue }
+          : documento
+      )
+    );
+  }
+
+  function excluirDocumento(id: string) {
+    setDocumentos((lista) => lista.filter((documento) => documento.id !== id));
   }
 
   function prioridadeTexto(
@@ -496,6 +565,41 @@ export default function Tarefas() {
     return dias;
   }, [hoje]);
 
+  const totalDocumentos = useMemo(
+    () => tarefas.reduce((total, tarefa) => total + (tarefa.documentos?.length || 0), 0),
+    [tarefas]
+  );
+
+  const documentosEntregues = useMemo(
+    () => tarefas.reduce((total, tarefa) => total + (tarefa.documentos?.filter((documento) => documento.entregue).length || 0), 0),
+    [tarefas]
+  );
+
+  const documentosPendentes = totalDocumentos - documentosEntregues;
+
+  const gruposResumo = useMemo(() => {
+    const mapa = new Map<string, { grupo: string; proposta: string; instrumento: string; pendentes: number; entregues: number; tarefas: number }>();
+
+    tarefas.forEach((tarefa) => {
+      if (!tarefa.grupo_numero && !tarefa.proposta_numero && !tarefa.instrumento_numero) return;
+      const chave = `${tarefa.grupo_numero || ""}|${tarefa.proposta_numero || ""}|${tarefa.instrumento_numero || ""}`;
+      const atual = mapa.get(chave) || {
+        grupo: tarefa.grupo_numero || "—",
+        proposta: tarefa.proposta_numero || "—",
+        instrumento: tarefa.instrumento_numero || "—",
+        pendentes: 0,
+        entregues: 0,
+        tarefas: 0,
+      };
+      atual.pendentes += tarefa.documentos?.filter((documento) => !documento.entregue).length || 0;
+      atual.entregues += tarefa.documentos?.filter((documento) => documento.entregue).length || 0;
+      atual.tarefas += 1;
+      mapa.set(chave, atual);
+    });
+
+    return Array.from(mapa.values()).slice(0, 6);
+  }, [tarefas]);
+
   function iniciarArraste(id: string) {
     setArrastando(id);
   }
@@ -614,6 +718,38 @@ export default function Tarefas() {
           )}
         </div>
 
+        {(tarefa.grupo_numero || tarefa.proposta_numero || tarefa.instrumento_numero) && (
+          <div
+            style={{
+              marginTop: 7,
+              fontSize: 12,
+              color: "#475569",
+              fontWeight: 600,
+            }}
+          >
+            🏷️ Grupo {tarefa.grupo_numero || "—"} &nbsp;|&nbsp; Prop. {tarefa.proposta_numero || "—"} &nbsp;|&nbsp; Instr. {tarefa.instrumento_numero || "—"}
+          </div>
+        )}
+
+        {(tarefa.documentos?.length || 0) > 0 && (
+          <div
+            style={{
+              marginTop: 8,
+              padding: "7px 9px",
+              borderRadius: 8,
+              background: "#f8fafc",
+              fontSize: 12,
+            }}
+          >
+            📎 Documentação: <strong>{tarefa.documentos?.filter((documento) => documento.entregue).length || 0}</strong> entregue(s) de <strong>{tarefa.documentos?.length || 0}</strong>
+            {(tarefa.documentos?.filter((documento) => !documento.entregue).length || 0) > 0 && (
+              <span style={{ color: "#dc2626", marginLeft: 8, fontWeight: 700 }}>
+                • {tarefa.documentos?.filter((documento) => !documento.entregue).length} faltando
+              </span>
+            )}
+          </div>
+        )}
+
         <div
           style={{
             marginTop: 5,
@@ -680,6 +816,16 @@ export default function Tarefas() {
               {tarefa.notes}
             </div>
           )}
+
+        {!compacto && (tarefa.documentos?.length || 0) > 0 && (
+          <div style={{ marginTop: 9, fontSize: 12 }}>
+            {tarefa.documentos?.map((documento) => (
+              <div key={documento.id} style={{ marginBottom: 4 }}>
+                {documento.entregue ? "🟢" : "🔴"} {documento.titulo} — {documento.entregue ? "Entregue" : "Faltando"}
+              </div>
+            ))}
+          </div>
+        )}
 
         <div
           style={{
@@ -1138,6 +1284,49 @@ export default function Tarefas() {
             }
           />
 
+          <div
+            style={{
+              marginTop: 18,
+              padding: 14,
+              background: "#fff",
+              border: "1px solid #e2e8f0",
+              borderRadius: 10,
+            }}
+          >
+            <strong>📋 Identificação do acompanhamento</strong>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 8, marginTop: 10 }}>
+              <input value={grupoNumero} onChange={(e) => setGrupoNumero(e.target.value)} placeholder="Nº do grupo" />
+              <input value={propostaNumero} onChange={(e) => setPropostaNumero(e.target.value)} placeholder="Nº da proposta" />
+              <input value={instrumentoNumero} onChange={(e) => setInstrumentoNumero(e.target.value)} placeholder="Nº do instrumento" />
+            </div>
+
+            <div style={{ marginTop: 12, fontWeight: 600 }}>📎 Documentos / pendências</div>
+            <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+              <input
+                value={novoDocumento}
+                onChange={(e) => setNovoDocumento(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") adicionarDocumento(); }}
+                placeholder="Ex.: Certidão Federal"
+                style={{ flex: 1, minWidth: 220 }}
+              />
+              <button type="button" onClick={adicionarDocumento}>➕ Adicionar</button>
+            </div>
+
+            {documentos.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                {documentos.map((documento) => (
+                  <div key={documento.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <button type="button" onClick={() => alternarDocumento(documento.id)}>
+                      {documento.entregue ? "🟢 Entregue" : "🔴 Faltando"}
+                    </button>
+                    <span style={{ flex: 1, textDecoration: documento.entregue ? "line-through" : "none" }}>{documento.titulo}</span>
+                    <button type="button" onClick={() => excluirDocumento(documento.id)}>🗑️</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <p>Observações</p>
 
           <textarea
@@ -1277,6 +1466,117 @@ export default function Tarefas() {
               >
                 ▶
               </button>
+            </div>
+          </div>
+
+          {/* ANOTAÇÕES DE ACOMPANHAMENTO SEM PRAZO */}
+          <div
+            style={{
+              background: "#fff",
+              border: "1px solid #e2e8f0",
+              borderRadius: 12,
+              padding: 15,
+              marginBottom: 20,
+              boxShadow: "0 2px 8px rgba(15,23,42,.05)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+                marginBottom: 8,
+              }}
+            >
+              <div>
+                <h2 style={{ margin: 0, fontSize: 19 }}>📋 Acompanhamento</h2>
+                <div style={{ color: "#64748b", fontSize: 13, marginTop: 3 }}>
+                  Anote situações, pendências e informações importantes que não têm prazo definido.
+                </div>
+              </div>
+
+              <button
+                onClick={salvarAcompanhamento}
+                style={{
+                  padding: "9px 14px",
+                  border: "none",
+                  borderRadius: 8,
+                  background: "#2563eb",
+                  color: "#fff",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                }}
+              >
+                💾 Salvar
+              </button>
+            </div>
+
+            <textarea
+              value={anotacoesAcompanhamento}
+              onChange={(e) => setAnotacoesAcompanhamento(e.target.value)}
+              placeholder={`Exemplo:
+
+Grupo 178 | Prop. 0245 | Instr. 12/2026
+• Falta documento da instituição
+• Aguardar assinatura
+• Conferir parecer
+
+Grupo 195 | Prop. 0310 | Instr. 08/2026
+• Documento entregue
+• Falta comprovante`}
+              style={{
+                width: "100%",
+                minHeight: 120,
+                padding: 12,
+                border: "1px solid #cbd5e1",
+                borderRadius: 9,
+                boxSizing: "border-box",
+                resize: "vertical",
+                fontFamily: "Arial, sans-serif",
+                fontSize: 14,
+                lineHeight: 1.5,
+                outline: "none",
+              }}
+            />
+          </div>
+
+          {/* PAINEL DE ACOMPANHAMENTO */}
+          <div
+            style={{
+              background: "#fff",
+              border: "1px solid #e2e8f0",
+              borderRadius: 12,
+              padding: 15,
+              marginBottom: 20,
+              boxShadow: "0 2px 8px rgba(15,23,42,.05)",
+            }}
+          >
+            <h2 style={{ marginTop: 0, marginBottom: 12 }}>📊 Acompanhamento de Pendências</h2>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(110px, 1fr))", gap: 8 }}>
+              <div style={{ padding: 10, borderRadius: 10, background: "#fff1f2", textAlign: "center" }}>🔴<div style={{ fontSize: 24, fontWeight: 800 }}>{atrasadas.length}</div><small>Atrasadas</small></div>
+              <div style={{ padding: 10, borderRadius: 10, background: "#fff7ed", textAlign: "center" }}>🟠<div style={{ fontSize: 24, fontWeight: 800 }}>{tarefasHoje.length}</div><small>Vencem hoje</small></div>
+              <div style={{ padding: 10, borderRadius: 10, background: "#eff6ff", textAlign: "center" }}>🔵<div style={{ fontSize: 24, fontWeight: 800 }}>{emAndamento.length}</div><small>Em andamento</small></div>
+              <div style={{ padding: 10, borderRadius: 10, background: "#f0fdf4", textAlign: "center" }}>🟢<div style={{ fontSize: 24, fontWeight: 800 }}>{historico.length}</div><small>Concluídas</small></div>
+            </div>
+
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid #e2e8f0" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <strong>📁 Pendências por Grupo / Proposta</strong>
+                <span style={{ fontSize: 12, color: "#64748b" }}>{documentosEntregues} entregues • {documentosPendentes} faltando</span>
+              </div>
+              {gruposResumo.length === 0 ? (
+                <div style={{ color: "#64748b", fontSize: 13 }}>Cadastre grupo, proposta e instrumento nas tarefas para acompanhar por instituição.</div>
+              ) : (
+                gruposResumo.map((grupo) => (
+                  <div key={`${grupo.grupo}-${grupo.proposta}-${grupo.instrumento}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 13 }}><strong>Grupo {grupo.grupo}</strong> | Prop. {grupo.proposta} | Instr. {grupo.instrumento}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: grupo.pendentes > 0 ? "#dc2626" : "#16a34a" }}>{grupo.pendentes > 0 ? `🔴 ${grupo.pendentes} faltando` : `🟢 ${grupo.entregues} entregues`}</span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
