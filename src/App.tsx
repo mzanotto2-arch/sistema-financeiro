@@ -8,6 +8,7 @@ import Contatos from "./pages/Contatos";
 import Receitas from "./pages/Receitas";
 import Despesas from "./pages/Despesas";
 import Parcelas from "./pages/Parcelas";
+import Pagamentos from "./pages/Pagamentos";
 import Pesquisa from "./pages/Pesquisa";
 import Tarefas from "./pages/Tarefas";
 
@@ -15,24 +16,50 @@ import Login from "./auth/Login";
 import RedefinirSenha from "./auth/RedefinirSenha";
 import ProtectedRoute from "./auth/ProtectedRoute";
 
+import PortalLogin from "./portal/PortalLogin";
+import PortalHome from "./portal/PortalHome";
+
 function App() {
   return (
     <BrowserRouter>
       <Routes>
 
-        {/* LOGIN */}
+        {/* =========================
+            PORTAL DA INSTITUIÇÃO
+           ========================= */}
+
+        <Route
+          path="/portal"
+          element={<PortalLogin />}
+        />
+
+        <Route
+          path="/portal/documentos"
+          element={<PortalHome />}
+        />
+
+        {/* =========================
+            LOGIN DO SISTEMA
+           ========================= */}
+
         <Route
           path="/login"
           element={<Login />}
         />
 
         {/* REDEFINIR SENHA */}
+
         <Route
           path="/redefinir-senha"
           element={<RedefinirSenha />}
         />
 
+        {/* =========================
+            SISTEMA FINANCEIRO
+           ========================= */}
+
         {/* DASHBOARD */}
+
         <Route
           path="/"
           element={
@@ -45,6 +72,7 @@ function App() {
         />
 
         {/* CLIENTES */}
+
         <Route
           path="/clientes"
           element={
@@ -57,6 +85,7 @@ function App() {
         />
 
         {/* CONTATOS */}
+
         <Route
           path="/contatos"
           element={
@@ -69,6 +98,7 @@ function App() {
         />
 
         {/* RECEITAS */}
+
         <Route
           path="/receitas"
           element={
@@ -81,6 +111,7 @@ function App() {
         />
 
         {/* DESPESAS */}
+
         <Route
           path="/despesas"
           element={
@@ -93,6 +124,7 @@ function App() {
         />
 
         {/* PARCELAS */}
+
         <Route
           path="/parcelas"
           element={
@@ -104,7 +136,21 @@ function App() {
           }
         />
 
+        {/* PAGAMENTOS */}
+
+        <Route
+          path="/pagamentos"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Pagamentos />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+
         {/* TAREFAS */}
+
         <Route
           path="/tarefas"
           element={
@@ -117,6 +163,7 @@ function App() {
         />
 
         {/* PESQUISA */}
+
         <Route
           path="/pesquisa"
           element={
