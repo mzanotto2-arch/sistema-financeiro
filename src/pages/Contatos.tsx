@@ -65,13 +65,13 @@ export default function Contatos() {
       }
 
       const dados = {
-        nome,
-        instituicao,
-        telefone,
-        whatsapp,
-        email,
-        cargo,
-        observacoes,
+        nome: nome.trim(),
+        instituicao: instituicao.trim(),
+        telefone: telefone.trim(),
+        whatsapp: whatsapp.trim(),
+        email: email.trim(),
+        cargo: cargo.trim(),
+        observacoes: observacoes.trim(),
         updated_at: new Date().toISOString(),
       };
 
@@ -154,15 +154,35 @@ export default function Contatos() {
     setObservacoes("");
   }
 
-  const contatosFiltrados = contatos.filter((contato) => {
-    const texto = pesquisa.toLowerCase();
+  // Normaliza o texto para facilitar a pesquisa
+  function normalizarTexto(valor: unknown) {
+    return String(valor ?? "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+  }
 
-    return (
-      contato.nome?.toLowerCase().includes(texto) ||
-      contato.instituicao?.toLowerCase().includes(texto) ||
-      contato.telefone?.toLowerCase().includes(texto) ||
-      contato.whatsapp?.toLowerCase().includes(texto) ||
-      contato.email?.toLowerCase().includes(texto)
+  // Pesquisa em todos os campos do contato
+  const contatosFiltrados = contatos.filter((contato) => {
+    const textoPesquisa = normalizarTexto(pesquisa);
+    // Se a pesquisa estiver vazia, mostra todos
+    if (!textoPesquisa) {
+      return true;
+    }
+
+    const campos = [
+      contato.nome,
+      contato.instituicao,
+      contato.telefone,
+      contato.whatsapp,
+      contato.email,
+      contato.cargo,
+      contato.observacoes,
+    ];
+
+    return campos.some((campo) =>
+      normalizarTexto(campo).includes(textoPesquisa)
     );
   });
 
@@ -203,9 +223,7 @@ export default function Contatos() {
 
       <input
         value={instituicao}
-        onChange={(e) =>
-          setInstituicao(e.target.value)
-        }
+        onChange={(e) => setInstituicao(e.target.value)}
         placeholder="ONG, associação, empresa..."
         style={{
           width: 400,
@@ -266,9 +284,7 @@ export default function Contatos() {
 
       <textarea
         value={observacoes}
-        onChange={(e) =>
-          setObservacoes(e.target.value)
-        }
+        onChange={(e) => setObservacoes(e.target.value)}
         rows={4}
         placeholder="Informações importantes sobre este contato..."
         style={{
@@ -298,24 +314,27 @@ export default function Contatos() {
       <h3>🔎 Pesquisar contatos</h3>
 
       <input
+        type="text"
         value={pesquisa}
-        onChange={(e) =>
-          setPesquisa(e.target.value)
-        }
+        onChange={(e) => setPesquisa(e.target.value)}
         placeholder="Digite nome, instituição, telefone ou e-mail..."
         style={{
           width: 500,
           padding: 10,
+          fontSize: 16,
         }}
       />
 
       <h3>
-        📋 Contatos cadastrados (
-        {contatosFiltrados.length})
+        📋 Contatos cadastrados ({contatosFiltrados.length})
       </h3>
 
       {contatosFiltrados.length === 0 ? (
-        <p>Nenhum contato encontrado.</p>
+        <p>
+          {pesquisa.trim()
+            ? `Nenhum contato encontrado para "${pesquisa}".`
+            : "Nenhum contato cadastrado."}
+        </p>
       ) : (
         contatosFiltrados.map((contato) => (
           <div
@@ -335,8 +354,7 @@ export default function Contatos() {
             {contato.instituicao && (
               <>
                 <br />
-                🏢 Instituição:{" "}
-                {contato.instituicao}
+                🏢 Instituição: {contato.instituicao}
               </>
             )}
 
@@ -371,24 +389,19 @@ export default function Contatos() {
             {contato.observacoes && (
               <>
                 <br />
-                📝 Observações:{" "}
-                {contato.observacoes}
+                📝 Observações: {contato.observacoes}
               </>
             )}
 
             <br />
             <br />
 
-            <button
-              onClick={() => editar(contato)}
-            >
+            <button onClick={() => editar(contato)}>
               ✏️ Editar
             </button>
 
             <button
-              onClick={() =>
-                excluir(contato.id!)
-              }
+              onClick={() => excluir(contato.id!)}
               style={{ marginLeft: 10 }}
             >
               🗑️ Excluir
