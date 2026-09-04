@@ -2,6 +2,10 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import Layout from "./components/Layout";
 
+// =========================
+// PÁGINAS DO SISTEMA
+// =========================
+
 import Dashboard from "./pages/Dashboard";
 import Clientes from "./pages/Clientes";
 import Contatos from "./pages/Contatos";
@@ -11,22 +15,33 @@ import Parcelas from "./pages/Parcelas";
 import Pagamentos from "./pages/Pagamentos";
 import Pesquisa from "./pages/Pesquisa";
 import Tarefas from "./pages/Tarefas";
+import Editais from "./pages/Editais";
+
+// =========================
+// AUTENTICAÇÃO DO SISTEMA
+// =========================
 
 import Login from "./auth/Login";
 import RedefinirSenha from "./auth/RedefinirSenha";
 import ProtectedRoute from "./auth/ProtectedRoute";
 
+// =========================
+// PORTAL DA INSTITUIÇÃO
+// =========================
+
 import PortalLogin from "./portal/PortalLogin";
 import PortalHome from "./portal/PortalHome";
+import PortalAlterarSenha from "./portal/PortalAlterarSenha";
+import PortalProtectedRoute from "./portal/PortalProtectedRoute";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
 
-        {/* =========================
+        {/* ==================================================
             PORTAL DA INSTITUIÇÃO
-           ========================= */}
+           ================================================== */}
 
         <Route
           path="/portal"
@@ -35,30 +50,39 @@ function App() {
 
         <Route
           path="/portal/documentos"
-          element={<PortalHome />}
+          element={
+            <PortalProtectedRoute>
+              <PortalHome />
+            </PortalProtectedRoute>
+          }
         />
 
-        {/* =========================
-            LOGIN DO SISTEMA
-           ========================= */}
+        <Route
+          path="/portal/alterar-senha"
+          element={
+            <PortalProtectedRoute>
+              <PortalAlterarSenha />
+            </PortalProtectedRoute>
+          }
+        />
+
+        {/* ==================================================
+            LOGIN DO SISTEMA FINANCEIRO
+           ================================================== */}
 
         <Route
           path="/login"
           element={<Login />}
         />
 
-        {/* REDEFINIR SENHA */}
-
         <Route
           path="/redefinir-senha"
           element={<RedefinirSenha />}
         />
 
-        {/* =========================
-            SISTEMA FINANCEIRO
-           ========================= */}
-
-        {/* DASHBOARD */}
+        {/* ==================================================
+            DASHBOARD
+           ================================================== */}
 
         <Route
           path="/"
@@ -71,7 +95,9 @@ function App() {
           }
         />
 
-        {/* CLIENTES */}
+        {/* ==================================================
+            CLIENTES
+           ================================================== */}
 
         <Route
           path="/clientes"
@@ -84,7 +110,9 @@ function App() {
           }
         />
 
-        {/* CONTATOS */}
+        {/* ==================================================
+            CONTATOS
+           ================================================== */}
 
         <Route
           path="/contatos"
@@ -97,7 +125,9 @@ function App() {
           }
         />
 
-        {/* RECEITAS */}
+        {/* ==================================================
+            RECEITAS
+           ================================================== */}
 
         <Route
           path="/receitas"
@@ -110,7 +140,9 @@ function App() {
           }
         />
 
-        {/* DESPESAS */}
+        {/* ==================================================
+            DESPESAS
+           ================================================== */}
 
         <Route
           path="/despesas"
@@ -123,7 +155,9 @@ function App() {
           }
         />
 
-        {/* PARCELAS */}
+        {/* ==================================================
+            PARCELAS
+           ================================================== */}
 
         <Route
           path="/parcelas"
@@ -136,7 +170,9 @@ function App() {
           }
         />
 
-        {/* PAGAMENTOS */}
+        {/* ==================================================
+            PAGAMENTOS
+           ================================================== */}
 
         <Route
           path="/pagamentos"
@@ -149,7 +185,9 @@ function App() {
           }
         />
 
-        {/* TAREFAS */}
+        {/* ==================================================
+            TAREFAS
+           ================================================== */}
 
         <Route
           path="/tarefas"
@@ -162,7 +200,9 @@ function App() {
           }
         />
 
-        {/* PESQUISA */}
+        {/* ==================================================
+            PESQUISA
+           ================================================== */}
 
         <Route
           path="/pesquisa"
@@ -170,6 +210,21 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <Pesquisa />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ==================================================
+            EDITAIS
+           ================================================== */}
+
+        <Route
+          path="/editais"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Editais />
               </Layout>
             </ProtectedRoute>
           }

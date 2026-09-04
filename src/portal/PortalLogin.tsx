@@ -18,6 +18,14 @@ export default function PortalLogin() {
     try {
       setCarregando(true);
 
+      // Limpa qualquer sessão anterior antes de iniciar um novo acesso.
+      sessionStorage.removeItem("portal_codigo_proposta");
+      sessionStorage.removeItem("portal_usuario_id");
+      sessionStorage.removeItem("portal_instituicao_id");
+      sessionStorage.removeItem("portal_proposta_id");
+      sessionStorage.removeItem("portal_nome_usuario");
+      sessionStorage.removeItem("portal_nome_instituicao");
+
       const { data, error } = await supabase.rpc("portal_login", {
         p_codigo_proposta: codigoProposta.trim(),
         p_senha: senha,
@@ -27,6 +35,7 @@ export default function PortalLogin() {
       console.log("Erro do portal_login:", error);
 
       if (error) {
+        console.error("Erro retornado pelo Supabase:", error);
         throw error;
       }
 
@@ -37,43 +46,78 @@ export default function PortalLogin() {
 
       const usuario = data[0];
 
-      // Guarda os dados necessários para o Portal
+      // Confirma que todos os dados necessários foram retornados.
+      if (
+        !usuario.usuario_id ||
+        !usuario.instituicao_id ||
+        !usuario.proposta_id ||
+        !usuario.codigo_proposta
+      ) {
+        console.error(
+          "Dados incompletos retornados pelo portal_login:",
+          usuario
+        );
+
+        alert(
+          "Não foi possível identificar corretamente a instituição e a proposta."
+        );
+
+        return;
+      }
+
+      // ==================================================
+      // SESSÃO DA INSTITUIÇÃO
+      // ==================================================
+
       sessionStorage.setItem(
         "portal_codigo_proposta",
-        usuario.codigo_proposta
+        String(usuario.codigo_proposta)
       );
 
       sessionStorage.setItem(
         "portal_usuario_id",
-        usuario.usuario_id
+        String(usuario.usuario_id)
       );
 
       sessionStorage.setItem(
         "portal_instituicao_id",
-        usuario.instituicao_id
+        String(usuario.instituicao_id)
       );
 
       sessionStorage.setItem(
         "portal_proposta_id",
-        usuario.proposta_id
+        String(usuario.proposta_id)
       );
 
       sessionStorage.setItem(
         "portal_nome_usuario",
-        usuario.nome_usuario
+        String(usuario.nome_usuario || "")
       );
 
       sessionStorage.setItem(
         "portal_nome_instituicao",
-        usuario.nome_instituicao
+        String(usuario.nome_instituicao || "")
       );
 
-      // Entra somente na área do Portal
-      navigate("/portal/documentos");
+      console.log("Sessão do Portal criada:", {
+        codigo_proposta: usuario.codigo_proposta,
+        usuario_id: usuario.usuario_id,
+        instituicao_id: usuario.instituicao_id,
+        proposta_id: usuario.proposta_id,
+        nome_usuario: usuario.nome_usuario,
+        nome_instituicao: usuario.nome_instituicao,
+      });
+
+      // Vai somente para a área protegida do Portal.
+      navigate("/portal/documentos", { replace: true });
 
     } catch (error: any) {
       console.error("Erro no login do portal:", error);
-      alert(error.message || "Não foi possível entrar no Portal.");
+
+      alert(
+        error?.message ||
+          "Não foi possível entrar no Portal da Instituição."
+      );
     } finally {
       setCarregando(false);
     }
@@ -133,7 +177,7 @@ export default function PortalLogin() {
               marginTop: 8,
             }}
           >
-            Envio e acompanhamento de documentos
+            Acesso exclusivo para documentos
           </p>
         </div>
 
@@ -153,7 +197,9 @@ export default function PortalLogin() {
           type="text"
           value={codigoProposta}
           onChange={(e) => setCodigoProposta(e.target.value)}
-          placeholder="Ex.: 202250 ou PROP-2026-001"
+          placeholder="Ex.: 277602025"
+          disabled={carregando}
+          autoComplete="username"
           style={{
             width: "100%",
             padding: 13,
@@ -162,6 +208,7 @@ export default function PortalLogin() {
             boxSizing: "border-box",
             marginBottom: 22,
             fontSize: 15,
+            outline: "none",
           }}
         />
 
@@ -182,6 +229,8 @@ export default function PortalLogin() {
           value={senha}
           onChange={(e) => setSenha(e.target.value)}
           placeholder="Digite sua senha"
+          disabled={carregando}
+          autoComplete="current-password"
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               entrar();
@@ -193,8 +242,9 @@ export default function PortalLogin() {
             border: "1px solid #cbd5e1",
             borderRadius: 8,
             boxSizing: "border-box",
-            marginBottom: 22,
+            marginBottom: 18,
             fontSize: 15,
+            outline: "none",
           }}
         />
 
@@ -205,7 +255,7 @@ export default function PortalLogin() {
           style={{
             width: "100%",
             padding: 13,
-            background: "#2563eb",
+            background: carregando ? "#93c5fd" : "#2563eb",
             color: "#fff",
             border: "none",
             borderRadius: 8,
@@ -229,7 +279,9 @@ export default function PortalLogin() {
             lineHeight: 1.6,
           }}
         >
-          Área exclusiva para envio e acompanhamento de documentos.
+          🔒 Área exclusiva da instituição.
+          <br />
+          Seus documentos ficam vinculados à sua proposta.
         </div>
       </div>
     </div>

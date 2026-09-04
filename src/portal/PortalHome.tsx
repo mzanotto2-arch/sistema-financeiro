@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { supabase } from "../database/supabase";
 
 type TipoDocumento = "arquivo" | "link";
 
@@ -172,6 +173,62 @@ export default function PortalHome() {
   const [nomeUsuario] = useState(
     sessionStorage.getItem("portal_nome_usuario") || ""
   );
+
+  // ==========================================
+  // MINHA CONTA
+  // ==========================================
+  const [mostrarMinhaConta, setMostrarMinhaConta] = useState(false);
+  const [senhaAtual, setSenhaAtual] = useState("");
+  const [novaSenha, setNovaSenha] = useState("");
+  const [confirmarNovaSenha, setConfirmarNovaSenha] = useState("");
+  const [alterandoSenha, setAlterandoSenha] = useState(false);
+
+  const emailConta =
+    sessionStorage.getItem("portal_email") || "Não informado";
+
+  async function alterarSenha() {
+    if (!senhaAtual || !novaSenha || !confirmarNovaSenha) {
+      alert("Preencha todos os campos de senha.");
+      return;
+    }
+
+    if (novaSenha.length < 6) {
+      alert("A nova senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+
+    if (novaSenha !== confirmarNovaSenha) {
+      alert("A confirmação da nova senha não confere.");
+      return;
+    }
+
+    try {
+      setAlterandoSenha(true);
+
+      const { data, error } = await supabase.rpc("portal_alterar_senha", {
+        p_codigo_proposta: codigoProposta,
+        p_senha_atual: senhaAtual,
+        p_nova_senha: novaSenha,
+      });
+
+      if (error) throw error;
+
+      if (data !== true) {
+        throw new Error("Não foi possível alterar a senha.");
+      }
+
+      alert("Senha alterada com sucesso!");
+      setSenhaAtual("");
+      setNovaSenha("");
+      setConfirmarNovaSenha("");
+      setMostrarMinhaConta(false);
+    } catch (error: any) {
+      console.error("Erro ao alterar senha:", error);
+      alert(error.message || "Não foi possível alterar a senha.");
+    } finally {
+      setAlterandoSenha(false);
+    }
+  }
 
   // ==========================================
   // DOCUMENTOS DA PROPOSTA
@@ -767,18 +824,36 @@ export default function PortalHome() {
               )}
             </div>
 
-            <div
-              style={{
-                background: "#eef4ff",
-                padding: "13px 20px",
-                borderRadius: 10,
-                color: "#1f3c88",
-                fontWeight: 700,
-                fontSize: 16,
-              }}
-            >
-              Proposta:{" "}
-              {codigoProposta || "—"}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setMostrarMinhaConta(true)}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 10,
+                  padding: "11px 15px",
+                  background: "#fff",
+                  color: "#334155",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                👤 Minha conta
+              </button>
+
+              <div
+                style={{
+                  background: "#eef4ff",
+                  padding: "13px 20px",
+                  borderRadius: 10,
+                  color: "#1f3c88",
+                  fontWeight: 700,
+                  fontSize: 16,
+                }}
+              >
+                Proposta:{" "}
+                {codigoProposta || "—"}
+              </div>
             </div>
           </div>
         </div>
@@ -1187,6 +1262,65 @@ export default function PortalHome() {
             </div>
           )}
         </div>
+
+        {/* ==========================================
+            MINHA CONTA
+           ========================================== */}
+        {mostrarMinhaConta && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,.45)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              padding: 20,
+              zIndex: 9999,
+            }}
+          >
+            <div
+              style={{
+                width: "100%",
+                maxWidth: 500,
+                background: "#fff",
+                borderRadius: 14,
+                padding: 25,
+                boxShadow: "0 10px 40px rgba(0,0,0,.25)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                <div>
+                  <h2 style={{ margin: 0, color: "#1f3c88" }}>👤 Minha conta</h2>
+                  <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 13 }}>Atualize sua senha de acesso ao Portal.</p>
+                </div>
+                <button type="button" onClick={() => setMostrarMinhaConta(false)} style={{ border: "none", background: "#f1f5f9", borderRadius: 8, padding: "7px 10px", cursor: "pointer", fontSize: 18 }}>✕</button>
+              </div>
+
+              <label style={{ display: "block", fontWeight: 600, color: "#334155", marginBottom: 6 }}>E-mail</label>
+              <input type="text" value={emailConta} disabled style={{ width: "100%", padding: 12, border: "1px solid #cbd5e1", borderRadius: 8, boxSizing: "border-box", marginBottom: 14, background: "#f8fafc", color: "#64748b" }} />
+
+              <label style={{ display: "block", fontWeight: 600, color: "#334155", marginBottom: 6 }}>Código da proposta</label>
+              <input type="text" value={codigoProposta} disabled style={{ width: "100%", padding: 12, border: "1px solid #cbd5e1", borderRadius: 8, boxSizing: "border-box", marginBottom: 14, background: "#f8fafc", color: "#64748b" }} />
+
+              <label style={{ display: "block", fontWeight: 600, color: "#334155", marginBottom: 6 }}>Senha atual</label>
+              <input type="password" value={senhaAtual} onChange={(e) => setSenhaAtual(e.target.value)} placeholder="Digite sua senha atual" style={{ width: "100%", padding: 12, border: "1px solid #cbd5e1", borderRadius: 8, boxSizing: "border-box", marginBottom: 14 }} />
+
+              <label style={{ display: "block", fontWeight: 600, color: "#334155", marginBottom: 6 }}>Nova senha</label>
+              <input type="password" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} placeholder="Mínimo de 6 caracteres" style={{ width: "100%", padding: 12, border: "1px solid #cbd5e1", borderRadius: 8, boxSizing: "border-box", marginBottom: 14 }} />
+
+              <label style={{ display: "block", fontWeight: 600, color: "#334155", marginBottom: 6 }}>Confirmar nova senha</label>
+              <input type="password" value={confirmarNovaSenha} onChange={(e) => setConfirmarNovaSenha(e.target.value)} placeholder="Repita a nova senha" onKeyDown={(e) => { if (e.key === "Enter") alterarSenha(); }} style={{ width: "100%", padding: 12, border: "1px solid #cbd5e1", borderRadius: 8, boxSizing: "border-box", marginBottom: 20 }} />
+
+              <div style={{ display: "flex", gap: 10 }}>
+                <button type="button" onClick={alterarSenha} disabled={alterandoSenha} style={{ flex: 1, border: "none", borderRadius: 8, padding: 12, background: alterandoSenha ? "#94a3b8" : "#2563eb", color: "#fff", fontWeight: 700, cursor: alterandoSenha ? "wait" : "pointer" }}>
+                  {alterandoSenha ? "Alterando..." : "🔐 Alterar senha"}
+                </button>
+                <button type="button" onClick={() => setMostrarMinhaConta(false)} style={{ flex: 1, border: "none", borderRadius: 8, padding: 12, background: "#e2e8f0", color: "#334155", fontWeight: 600, cursor: "pointer" }}>Cancelar</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ==========================================
             FASE DE PAGAMENTOS
