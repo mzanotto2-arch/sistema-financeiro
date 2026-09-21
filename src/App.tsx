@@ -68,16 +68,15 @@ function App() {
         />
 
         {/* ==================================================
-            CADASTRO ADMINISTRATIVO DE INSTITUIÇÃO
+            CADASTRO DE INSTITUIÇÃO
+            ÁREA ADMINISTRATIVA
            ================================================== */}
 
         <Route
-          path="/portal/cadastrar-instituicao"
+          path="/portal/cadastrar"
           element={
             <ProtectedRoute>
-              <Layout>
-                <PortalCadastrarInstituicao />
-              </Layout>
+              <PortalCadastrarInstituicao />
             </ProtectedRoute>
           }
         />
