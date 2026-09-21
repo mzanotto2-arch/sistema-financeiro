@@ -18,7 +18,7 @@ import Tarefas from "./pages/Tarefas";
 import Editais from "./pages/Editais";
 
 // =========================
-// AUTENTICAÇÃO DO SISTEMA
+// AUTENTICAÇÃO
 // =========================
 
 import Login from "./auth/Login";
@@ -40,13 +40,16 @@ function App() {
     <BrowserRouter>
       <Routes>
 
-        {/* ==================================================
-            PORTAL DA INSTITUIÇÃO
-           ================================================== */}
+        {/* PORTAL */}
 
         <Route
           path="/portal"
           element={<PortalLogin />}
+        />
+
+        <Route
+          path="/portal/cadastrar"
+          element={<PortalCadastrarInstituicao />}
         />
 
         <Route
@@ -67,23 +70,7 @@ function App() {
           }
         />
 
-        {/* ==================================================
-            CADASTRO DE INSTITUIÇÃO
-            ÁREA ADMINISTRATIVA
-           ================================================== */}
-
-        <Route
-          path="/portal/cadastrar"
-          element={
-            <ProtectedRoute>
-              <PortalCadastrarInstituicao />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* ==================================================
-            LOGIN DO SISTEMA FINANCEIRO
-           ================================================== */}
+        {/* LOGIN */}
 
         <Route
           path="/login"
@@ -95,9 +82,7 @@ function App() {
           element={<RedefinirSenha />}
         />
 
-        {/* ==================================================
-            DASHBOARD
-           ================================================== */}
+        {/* DASHBOARD */}
 
         <Route
           path="/"
@@ -110,9 +95,7 @@ function App() {
           }
         />
 
-        {/* ==================================================
-            CLIENTES
-           ================================================== */}
+        {/* CLIENTES */}
 
         <Route
           path="/clientes"
@@ -125,9 +108,7 @@ function App() {
           }
         />
 
-        {/* ==================================================
-            CONTATOS
-           ================================================== */}
+        {/* CONTATOS */}
 
         <Route
           path="/contatos"
@@ -140,9 +121,7 @@ function App() {
           }
         />
 
-        {/* ==================================================
-            RECEITAS
-           ================================================== */}
+        {/* RECEITAS */}
 
         <Route
           path="/receitas"
@@ -155,9 +134,7 @@ function App() {
           }
         />
 
-        {/* ==================================================
-            DESPESAS
-           ================================================== */}
+        {/* DESPESAS */}
 
         <Route
           path="/despesas"
@@ -170,9 +147,7 @@ function App() {
           }
         />
 
-        {/* ==================================================
-            PARCELAS
-           ================================================== */}
+        {/* PARCELAS */}
 
         <Route
           path="/parcelas"
@@ -185,9 +160,7 @@ function App() {
           }
         />
 
-        {/* ==================================================
-            PAGAMENTOS
-           ================================================== */}
+        {/* PAGAMENTOS */}
 
         <Route
           path="/pagamentos"
@@ -200,9 +173,7 @@ function App() {
           }
         />
 
-        {/* ==================================================
-            TAREFAS
-           ================================================== */}
+        {/* TAREFAS */}
 
         <Route
           path="/tarefas"
@@ -215,9 +186,7 @@ function App() {
           }
         />
 
-        {/* ==================================================
-            PESQUISA
-           ================================================== */}
+        {/* PESQUISA */}
 
         <Route
           path="/pesquisa"
@@ -230,9 +199,7 @@ function App() {
           }
         />
 
-        {/* ==================================================
-            EDITAIS
-           ================================================== */}
+        {/* EDITAIS */}
 
         <Route
           path="/editais"
