@@ -33,6 +33,7 @@ import PortalLogin from "./portal/PortalLogin";
 import PortalHome from "./portal/PortalHome";
 import PortalAlterarSenha from "./portal/PortalAlterarSenha";
 import PortalProtectedRoute from "./portal/PortalProtectedRoute";
+import PortalCadastrarInstituicao from "./portal/PortalCadastrarInstituicao";
 
 function App() {
   return (
@@ -63,6 +64,21 @@ function App() {
             <PortalProtectedRoute>
               <PortalAlterarSenha />
             </PortalProtectedRoute>
+          }
+        />
+
+        {/* ==================================================
+            CADASTRO ADMINISTRATIVO DE INSTITUIÇÃO
+           ================================================== */}
+
+        <Route
+          path="/portal/cadastrar-instituicao"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <PortalCadastrarInstituicao />
+              </Layout>
+            </ProtectedRoute>
           }
         />
 
