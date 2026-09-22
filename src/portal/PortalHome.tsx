@@ -1,10 +1,11 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../database/supabase";
 
 type TipoDocumento = "arquivo" | "link";
 
 type Documento = {
   id: number;
+  dbId?: string;
   nome: string;
   tipo: TipoDocumento;
   status: "Pendente" | "Concluído";
@@ -13,6 +14,7 @@ type Documento = {
   caminhoArquivo?: string;
   nomeArquivo?: string;
   dataEnvio?: string;
+  enviadoPor?: string;
   ultimaTroca?: string;
   foiTrocado?: boolean;
   oculto?: boolean;
@@ -239,6 +241,88 @@ export default function PortalHome() {
   const [documentos, setDocumentos] =
     useState<Documento[]>(documentosIniciais);
 
+  const propostaId =
+    sessionStorage.getItem("portal_proposta_id") || "";
+
+  const usuarioId =
+    sessionStorage.getItem("portal_usuario_id") || "";
+
+  useEffect(() => {
+    async function carregarDocumentos() {
+      if (!propostaId) {
+        console.error("ID da proposta não encontrado na sessão.");
+        return;
+      }
+
+      try {
+          const { data, error } = await supabase.rpc(
+          "portal_listar_documentos",
+          {
+            p_proposta_id: propostaId,
+          }
+        );
+
+        if (error) {
+          console.error(
+            "Erro ao carregar documentos do Portal:",
+            error
+          );
+          return;
+        }
+
+        if (!data || data.length === 0) {
+          return;
+        }
+
+        setDocumentos((listaAtual) =>
+          listaAtual.map((documento) => {
+            const documentosDoMesmoNome = data
+              .filter(
+                (item: any) =>
+                  item.nome_documento === documento.nome
+              )
+              .sort(
+                (a: any, b: any) =>
+                  new Date(b.enviado_em).getTime() -
+                  new Date(a.enviado_em).getTime()
+              );
+
+            const ultimo = documentosDoMesmoNome[0];
+
+            if (!ultimo) {
+              return documento;
+            }
+
+            return {
+              ...documento,
+              dbId: ultimo.id,
+              status: ultimo.caminho_arquivo
+                ? "Concluído"
+                : "Pendente",
+              nomeArquivo:
+                ultimo.nome_arquivo || undefined,
+              caminhoArquivo:
+                ultimo.caminho_arquivo || undefined,
+              dataEnvio: ultimo.enviado_em
+                ? new Date(
+                    ultimo.enviado_em
+                  ).toLocaleString("pt-BR")
+                : undefined,
+              enviadoPor: nomeUsuario || "Usuário do Portal",
+            };
+          })
+        );
+      } catch (error) {
+        console.error(
+          "Erro inesperado ao carregar documentos:",
+          error
+        );
+      }
+    }
+
+    carregarDocumentos();
+  }, [propostaId]);
+
   const [pesquisa, setPesquisa] = useState("");
 
   const [novoDocumento, setNovoDocumento] = useState("");
@@ -300,6 +384,41 @@ export default function PortalHome() {
     useRef<HTMLInputElement | null>(null);
 
   // ==========================================
+  // ABRIR ARQUIVO SALVO NO STORAGE
+  // ==========================================
+
+  async function abrirDocumentoSalvo(caminho?: string) {
+    if (!caminho) {
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.storage
+        .from("portal-documentos")
+        .createSignedUrl(caminho, 60 * 60);
+
+      if (error) {
+        console.error("Erro ao gerar link do arquivo:", error);
+        alert(
+          error.message ||
+            "Não foi possível abrir o arquivo salvo."
+        );
+        return;
+      }
+
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (error: any) {
+      console.error("Erro inesperado ao abrir arquivo:", error);
+      alert(
+        error?.message ||
+          "Não foi possível abrir o arquivo salvo."
+      );
+    }
+  }
+
+  // ==========================================
   // LINK
   // ==========================================
 
@@ -354,34 +473,156 @@ export default function PortalHome() {
   // SELECIONAR ARQUIVO
   // ==========================================
 
-  function selecionarArquivo(
+  async function selecionarArquivo(
     evento: React.ChangeEvent<HTMLInputElement>
   ) {
     const arquivo = evento.target.files?.[0];
 
-    if (
-      !arquivo ||
-      documentoSelecionado === null
-    ) {
+    if (!arquivo || documentoSelecionado === null) {
       return;
     }
 
-    // DOCUMENTO DA PROPOSTA
+    // DOCUMENTO DA PROPOSTA: salvar no Storage e no banco.
     if (tipoUpload === "proposta") {
-      setDocumentos((lista) =>
-        lista.map((documento) =>
-          documento.id === documentoSelecionado
-            ? {
-                ...documento,
-                arquivo,
-                status: "Concluído",
-              }
-            : documento
-        )
+      if (!propostaId) {
+        alert("Não foi possível identificar a proposta.");
+        evento.target.value = "";
+        return;
+      }
+
+      if (!usuarioId) {
+        alert("Não foi possível identificar o usuário.");
+        evento.target.value = "";
+        return;
+      }
+
+      const documentoAtual = documentos.find(
+        (documento) => documento.id === documentoSelecionado
       );
+
+      if (!documentoAtual) {
+        alert("Documento não encontrado.");
+        evento.target.value = "";
+        return;
+      }
+
+      try {
+        const nomeSeguro = arquivo.name
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-zA-Z0-9._-]/g, "_");
+
+        const caminhoArquivo =
+          `${propostaId}/${crypto.randomUUID()}-${nomeSeguro}`;
+
+        const { error: erroUpload } = await supabase.storage
+          .from("portal-documentos")
+          .upload(caminhoArquivo, arquivo, {
+            cacheControl: "3600",
+            upsert: false,
+            contentType: arquivo.type || undefined,
+          });
+
+        if (erroUpload) {
+          console.error(
+            "Erro ao enviar arquivo para o Storage:",
+            erroUpload
+          );
+
+          alert(
+            erroUpload.message ||
+              "Não foi possível enviar o arquivo."
+          );
+
+          return;
+        }
+
+        const { data: documentoSalvo, error: erroBanco } =
+          await supabase.rpc("portal_adicionar_documento", {
+            p_proposta_id: propostaId,
+            p_nome_documento: documentoAtual.nome,
+            p_descricao: null,
+            p_obrigatorio: true,
+            p_nome_arquivo: arquivo.name,
+            p_caminho_arquivo: caminhoArquivo,
+            p_tamanho_arquivo: arquivo.size,
+            p_tipo_arquivo:
+              arquivo.type || "application/octet-stream",
+            p_enviado_por: usuarioId,
+          });
+
+        if (erroBanco) {
+          console.error(
+            "Erro ao registrar documento no banco:",
+            erroBanco
+          );
+
+          await supabase.storage
+            .from("portal-documentos")
+            .remove([caminhoArquivo]);
+
+          alert(
+            erroBanco.message ||
+              "O arquivo foi enviado, mas não foi possível registrar o documento."
+          );
+
+          return;
+        }
+
+        const agora = new Date().toLocaleString("pt-BR");
+
+        setDocumentos((lista) =>
+          lista.map((documento) =>
+            documento.id === documentoSelecionado
+              ? {
+                  ...documento,
+                  dbId:
+                    typeof documentoSalvo === "string"
+                      ? documentoSalvo
+                      : documento.dbId,
+                  arquivo,
+                  status: "Concluído",
+                  nomeArquivo: arquivo.name,
+                  caminhoArquivo,
+                  dataEnvio: agora,
+                  enviadoPor: nomeUsuario || "Usuário do Portal",
+                  ultimaTroca:
+                    documento.arquivo || documento.nomeArquivo
+                      ? agora
+                      : documento.ultimaTroca,
+                  foiTrocado:
+                    documento.arquivo || documento.nomeArquivo
+                      ? true
+                      : documento.foiTrocado,
+                }
+              : documento
+          )
+        );
+
+        alert("Documento enviado com sucesso!");
+      } catch (error: any) {
+        console.error(
+          "Erro inesperado ao enviar documento:",
+          error
+        );
+
+        alert(
+          error?.message ||
+            "Não foi possível enviar o documento."
+        );
+      } finally {
+        setDocumentoSelecionado(null);
+        setMesSelecionado(null);
+        setFornecedorSelecionado(null);
+        evento.target.value = "";
+      }
+
+      return;
     }
 
-    // DOCUMENTO DA FASE DE PAGAMENTOS
+    // DOCUMENTO DA FASE DE PAGAMENTOS.
+    // Mantemos esta parte funcionando localmente por enquanto,
+    // sem alterar a estrutura atual da fase de pagamentos.
     if (
       tipoUpload === "pagamento" &&
       mesSelecionado !== null &&
@@ -412,6 +653,7 @@ export default function PortalHome() {
                             dataEnvio: primeiraVersao
                               ? agora
                               : documento.dataEnvio || agora,
+                            enviadoPor: nomeUsuario || "Usuário do Portal",
                             ultimaTroca: primeiraVersao
                               ? documento.ultimaTroca
                               : agora,
@@ -432,7 +674,6 @@ export default function PortalHome() {
     setDocumentoSelecionado(null);
     setMesSelecionado(null);
     setFornecedorSelecionado(null);
-
     evento.target.value = "";
   }
 
@@ -1171,7 +1412,7 @@ export default function PortalHome() {
                             "#f0fdf4",
                           borderRadius: 8,
                           padding: 10,
-                          marginBottom: 12,
+                          marginBottom: 8,
                           color:
                             "#166534",
                           fontSize: 13,
@@ -1182,6 +1423,49 @@ export default function PortalHome() {
                         📎{" "}
                         {documento.arquivo?.name || documento.nomeArquivo}
                       </div>
+                    )}
+
+                    {documento.dataEnvio && (
+                      <div
+                        style={{
+                          color: "#64748b",
+                          fontSize: 12,
+                          marginBottom: 10,
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        👤 Enviado por: {documento.enviadoPor || nomeUsuario || "Usuário do Portal"}
+                        <br />
+                        🕐 Enviado em: {documento.dataEnvio}
+                        {documento.ultimaTroca && (
+                          <>
+                            <br />
+                            🔄 Última troca: {documento.ultimaTroca}
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {documento.caminhoArquivo && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          abrirDocumentoSalvo(documento.caminhoArquivo)
+                        }
+                        style={{
+                          width: "100%",
+                          padding: 10,
+                          border: "1px solid #16a34a",
+                          borderRadius: 7,
+                          background: "#f0fdf4",
+                          color: "#166534",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          marginBottom: 12,
+                        }}
+                      >
+                        📂 Abrir arquivo salvo
+                      </button>
                     )}
 
                     {documento.link && (
@@ -1499,8 +1783,11 @@ export default function PortalHome() {
                                         <div style={{ background: "#f0fdf4", borderRadius: 8, padding: 10, marginBottom: 10, color: "#166534", fontSize: 12, wordBreak: "break-word" }}>📎 {documento.arquivo.name}</div>
                                       )}
 
-                                      {documento.dataEnvio && !documento.ultimaTroca && (
-                                        <div style={{ color: "#64748b", fontSize: 12, marginBottom: 8 }}>🕐 Enviado em: {documento.dataEnvio}</div>
+                                      {documento.dataEnvio && (
+                                        <div style={{ color: "#64748b", fontSize: 12, marginBottom: 8, lineHeight: 1.6 }}>
+                                          👤 Enviado por: {documento.enviadoPor || nomeUsuario || "Usuário do Portal"}<br />
+                                          🕐 Enviado em: {documento.dataEnvio}
+                                        </div>
                                       )}
 
                                       {documento.foiTrocado && documento.ultimaTroca && (
