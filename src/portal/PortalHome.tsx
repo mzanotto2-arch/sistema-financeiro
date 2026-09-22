@@ -10,6 +10,8 @@ type Documento = {
   status: "Pendente" | "Concluído";
   arquivo?: File;
   link?: string;
+  caminhoArquivo?: string;
+  nomeArquivo?: string;
   dataEnvio?: string;
   ultimaTroca?: string;
   foiTrocado?: boolean;
@@ -327,21 +329,21 @@ export default function PortalHome() {
   // ==========================================
 
   function abrirArquivo(
-    id: number,
-    tipo: "proposta" | "pagamento",
-    idMes?: number,
-    idFornecedor?: number
-  ) {
-    setDocumentoSelecionado(id);
-    setTipoUpload(tipo);
+  id: number,
+  tipo: "proposta" | "pagamento",
+  idMes?: number,
+  idFornecedor?: number
+) {
+  setDocumentoSelecionado(id);
+  setTipoUpload(tipo);
 
-    if (tipo === "pagamento") {
-      setMesSelecionado(idMes ?? null);
-      setFornecedorSelecionado(idFornecedor ?? null);
-    } else {
-      setMesSelecionado(null);
-      setFornecedorSelecionado(null);
-    }
+  if (tipo === "pagamento") {
+    setMesSelecionado(idMes ?? null);
+    setFornecedorSelecionado(idFornecedor ?? null);
+  } else {
+    setMesSelecionado(null);
+    setFornecedorSelecionado(null);
+  }
 
     setTimeout(() => {
       inputArquivo.current?.click();
@@ -439,12 +441,12 @@ export default function PortalHome() {
   // ==========================================
 
   function abrirLink(
-    id: number,
-    linkAtual?: string
-  ) {
-    setLinkAberto(id);
-    setValorLink(linkAtual || "");
-  }
+  id: number,
+  linkAtual?: string
+) {
+  setLinkAberto(id);
+  setValorLink(linkAtual || "");
+}
 
   function salvarLink() {
     if (linkAberto === null) {
@@ -1162,7 +1164,7 @@ export default function PortalHome() {
                       </span>
                     </div>
 
-                    {documento.arquivo && (
+                    {(documento.arquivo || documento.nomeArquivo) && (
                       <div
                         style={{
                           background:
@@ -1178,7 +1180,7 @@ export default function PortalHome() {
                         }}
                       >
                         📎{" "}
-                        {documento.arquivo.name}
+                        {documento.arquivo?.name || documento.nomeArquivo}
                       </div>
                     )}
 
@@ -1225,7 +1227,7 @@ export default function PortalHome() {
                         }}
                       >
                         📤{" "}
-                        {documento.arquivo
+                        {documento.arquivo || documento.nomeArquivo
                           ? "Trocar arquivo"
                           : "Anexar arquivo"}
                       </button>
