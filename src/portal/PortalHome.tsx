@@ -363,6 +363,173 @@ export default function PortalHome() {
   const [fornecedorAberto, setFornecedorAberto] =
     useState<number | null>(null);
 
+
+  // ==========================================
+  // CARREGAR DOCUMENTOS DA FASE DE PAGAMENTOS
+  // ==========================================
+
+  useEffect(() => {
+    async function carregarDocumentosPagamento() {
+      if (!propostaId) return;
+
+      try {
+        const { data, error } = await supabase.rpc(
+          "portal_listar_documentos",
+          {
+            p_proposta_id: propostaId,
+          }
+        );
+
+        if (error) {
+          console.error(
+            "Erro ao carregar documentos de pagamento:",
+            error
+          );
+          return;
+        }
+
+        if (!data || data.length === 0) return;
+
+        const grupos = new Map<
+          string,
+          {
+            mes: number;
+            ano: number;
+            fornecedor: string;
+            documentos: any[];
+          }
+        >();
+
+        for (const item of data) {
+          if (!item.descricao) continue;
+
+          try {
+            const meta = JSON.parse(item.descricao);
+
+            if (
+              meta?.tipo !== "pagamento" ||
+              !meta.mes ||
+              !meta.ano ||
+              !meta.fornecedor ||
+              !meta.documento
+            ) {
+              continue;
+            }
+
+            const chave = `${meta.ano}-${meta.mes}-${meta.fornecedor}`;
+            const grupo = grupos.get(chave) || {
+              mes: Number(meta.mes),
+              ano: Number(meta.ano),
+              fornecedor: String(meta.fornecedor),
+              documentos: [],
+            };
+
+            grupo.documentos.push(item);
+            grupos.set(chave, grupo);
+          } catch {
+            // Ignora descrições antigas que não sejam JSON de pagamento.
+          }
+        }
+
+        const mesesReconstruidos: MesPagamento[] = [];
+        let contadorId = Date.now();
+
+        for (const grupo of grupos.values()) {
+          const documentosMap = new Map<string, any>();
+
+          for (const item of grupo.documentos) {
+            try {
+              const meta = JSON.parse(item.descricao);
+              const chaveDocumento = String(meta.documento);
+              const anterior = documentosMap.get(chaveDocumento);
+
+              if (
+                !anterior ||
+                new Date(item.enviado_em || 0).getTime() >
+                  new Date(anterior.enviado_em || 0).getTime()
+              ) {
+                documentosMap.set(chaveDocumento, item);
+              }
+            } catch {
+              // Ignora registros inválidos.
+            }
+          }
+
+          const fornecedorId = ++contadorId;
+
+          const documentosBase = documentosPagamentoIniciais();
+          const documentosCarregados = Array.from(documentosMap.values()).map(
+            (item: any) => {
+              const meta = JSON.parse(item.descricao);
+
+              return {
+                id: ++contadorId,
+                dbId: item.id,
+                nome: String(meta.documento),
+                tipo: "arquivo" as const,
+                status: item.caminho_arquivo
+                  ? "Concluído" as const
+                  : "Pendente" as const,
+                nomeArquivo:
+                  item.nome_arquivo || undefined,
+                caminhoArquivo:
+                  item.caminho_arquivo || undefined,
+                dataEnvio: item.enviado_em
+                  ? new Date(item.enviado_em).toLocaleString("pt-BR")
+                  : undefined,
+                enviadoPor:
+                  nomeUsuario || "Usuário do Portal",
+              };
+            }
+          );
+
+          const documentosReconstruidos = documentosBase.map((base) => {
+            const salvo = documentosCarregados.find(
+              (item) => item.nome === base.nome
+            );
+
+            return salvo
+              ? { ...base, ...salvo, id: salvo.id }
+              : base;
+          });
+
+          for (const salvo of documentosCarregados) {
+            if (!documentosReconstruidos.some((item) => item.nome === salvo.nome)) {
+              documentosReconstruidos.push(salvo);
+            }
+          }
+
+          const fornecedor: Fornecedor = {
+            id: fornecedorId,
+            nome: grupo.fornecedor,
+            documentos: documentosReconstruidos,
+          };
+
+          mesesReconstruidos.push({
+            id: ++contadorId,
+            mes: grupo.mes,
+            ano: grupo.ano,
+            fornecedores: [fornecedor],
+          });
+        }
+
+        mesesReconstruidos.sort((a, b) => {
+          if (a.ano !== b.ano) return b.ano - a.ano;
+          return b.mes - a.mes;
+        });
+
+        setMesesPagamento(mesesReconstruidos);
+      } catch (error) {
+        console.error(
+          "Erro inesperado ao carregar documentos de pagamento:",
+          error
+        );
+      }
+    }
+
+    carregarDocumentosPagamento();
+  }, [propostaId]);
+
   // ==========================================
   // CONTROLE DE UPLOAD
   // ==========================================
@@ -620,55 +787,180 @@ export default function PortalHome() {
       return;
     }
 
-    // DOCUMENTO DA FASE DE PAGAMENTOS.
-    // Mantemos esta parte funcionando localmente por enquanto,
-    // sem alterar a estrutura atual da fase de pagamentos.
+    // DOCUMENTO DA FASE DE PAGAMENTOS: salvar no Storage e no banco.
     if (
       tipoUpload === "pagamento" &&
       mesSelecionado !== null &&
       fornecedorSelecionado !== null
     ) {
-      const agora = new Date().toLocaleString("pt-BR");
+      if (!propostaId) {
+        alert("Não foi possível identificar a proposta.");
+        evento.target.value = "";
+        return;
+      }
 
-      setMesesPagamento((lista) =>
-        lista.map((mes) =>
-          mes.id === mesSelecionado
-            ? {
-                ...mes,
-                fornecedores: mes.fornecedores.map((fornecedor) =>
-                  fornecedor.id === fornecedorSelecionado
-                    ? {
-                        ...fornecedor,
-                        documentos: fornecedor.documentos.map((documento) => {
-                          if (documento.id !== documentoSelecionado) {
-                            return documento;
-                          }
+      if (!usuarioId) {
+        alert("Não foi possível identificar o usuário.");
+        evento.target.value = "";
+        return;
+      }
 
-                          const primeiraVersao = !documento.arquivo;
-
-                          return {
-                            ...documento,
-                            arquivo,
-                            status: "Concluído",
-                            dataEnvio: primeiraVersao
-                              ? agora
-                              : documento.dataEnvio || agora,
-                            enviadoPor: nomeUsuario || "Usuário do Portal",
-                            ultimaTroca: primeiraVersao
-                              ? documento.ultimaTroca
-                              : agora,
-                            foiTrocado: primeiraVersao
-                              ? documento.foiTrocado
-                              : true,
-                          };
-                        }),
-                      }
-                    : fornecedor
-                ),
-              }
-            : mes
-        )
+      const mesAtual = mesesPagamento.find(
+        (mes) => mes.id === mesSelecionado
       );
+
+      const fornecedorAtual = mesAtual?.fornecedores.find(
+        (fornecedor) => fornecedor.id === fornecedorSelecionado
+      );
+
+      const documentoAtual = fornecedorAtual?.documentos.find(
+        (documento) => documento.id === documentoSelecionado
+      );
+
+      if (!mesAtual || !fornecedorAtual || !documentoAtual) {
+        alert("Documento de pagamento não encontrado.");
+        evento.target.value = "";
+        return;
+      }
+
+      try {
+        const nomeSeguro = arquivo.name
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-zA-Z0-9._-]/g, "_");
+
+        const caminhoArquivo =
+          `${propostaId}/pagamentos/${mesAtual.ano}/${mesAtual.mes}/${crypto.randomUUID()}-${nomeSeguro}`;
+
+        const { error: erroUpload } = await supabase.storage
+          .from("portal-documentos")
+          .upload(caminhoArquivo, arquivo, {
+            cacheControl: "3600",
+            upsert: false,
+            contentType: arquivo.type || undefined,
+          });
+
+        if (erroUpload) {
+          console.error(
+            "Erro ao enviar documento de pagamento para o Storage:",
+            erroUpload
+          );
+
+          alert(
+            erroUpload.message ||
+              "Não foi possível enviar o documento de pagamento."
+          );
+
+          return;
+        }
+
+        const descricaoPagamento = JSON.stringify({
+          tipo: "pagamento",
+          mes: mesAtual.mes,
+          ano: mesAtual.ano,
+          fornecedor: fornecedorAtual.nome,
+          documento: documentoAtual.nome,
+        });
+
+        const { data: documentoSalvo, error: erroBanco } =
+          await supabase.rpc("portal_adicionar_documento", {
+            p_proposta_id: propostaId,
+            p_nome_documento: documentoAtual.nome,
+            p_descricao: descricaoPagamento,
+            p_obrigatorio: true,
+            p_nome_arquivo: arquivo.name,
+            p_caminho_arquivo: caminhoArquivo,
+            p_tamanho_arquivo: arquivo.size,
+            p_tipo_arquivo:
+              arquivo.type || "application/octet-stream",
+            p_enviado_por: usuarioId,
+          });
+
+        if (erroBanco) {
+          console.error(
+            "Erro ao registrar documento de pagamento no banco:",
+            erroBanco
+          );
+
+          await supabase.storage
+            .from("portal-documentos")
+            .remove([caminhoArquivo]);
+
+          alert(
+            erroBanco.message ||
+              "O arquivo foi enviado, mas não foi possível registrar o documento de pagamento."
+          );
+
+          return;
+        }
+
+        const agora = new Date().toLocaleString("pt-BR");
+
+        setMesesPagamento((lista) =>
+          lista.map((mes) =>
+            mes.id === mesSelecionado
+              ? {
+                  ...mes,
+                  fornecedores: mes.fornecedores.map((fornecedor) =>
+                    fornecedor.id === fornecedorSelecionado
+                      ? {
+                          ...fornecedor,
+                          documentos: fornecedor.documentos.map(
+                            (documento) => {
+                              if (
+                                documento.id !== documentoSelecionado
+                              ) {
+                                return documento;
+                              }
+
+                              const primeiraVersao =
+                                !documento.arquivo &&
+                                !documento.nomeArquivo;
+
+                              return {
+                                ...documento,
+                                dbId:
+                                  typeof documentoSalvo === "string"
+                                    ? documentoSalvo
+                                    : documento.dbId,
+                                arquivo,
+                                status: "Concluído",
+                                nomeArquivo: arquivo.name,
+                                caminhoArquivo,
+                                dataEnvio: primeiraVersao
+                                  ? agora
+                                  : documento.dataEnvio || agora,
+                                enviadoPor:
+                                  nomeUsuario || "Usuário do Portal",
+                                ultimaTroca: primeiraVersao
+                                  ? documento.ultimaTroca
+                                  : agora,
+                                foiTrocado: primeiraVersao
+                                  ? documento.foiTrocado
+                                  : true,
+                              };
+                            }
+                          ),
+                        }
+                      : fornecedor
+                  ),
+                }
+              : mes
+          )
+        );
+
+        alert("Documento de pagamento enviado com sucesso!");
+      } catch (error: any) {
+        console.error(
+          "Erro inesperado ao enviar documento de pagamento:",
+          error
+        );
+
+        alert(
+          error?.message ||
+            "Não foi possível enviar o documento de pagamento."
+        );
+      }
     }
 
     setDocumentoSelecionado(null);
@@ -1788,6 +2080,16 @@ export default function PortalHome() {
                                           👤 Enviado por: {documento.enviadoPor || nomeUsuario || "Usuário do Portal"}<br />
                                           🕐 Enviado em: {documento.dataEnvio}
                                         </div>
+                                      )}
+
+                                      {documento.caminhoArquivo && (
+                                        <button
+                                          type="button"
+                                          onClick={() => abrirDocumentoSalvo(documento.caminhoArquivo)}
+                                          style={{ width: "100%", padding: 9, border: "1px solid #16a34a", borderRadius: 7, background: "#f0fdf4", color: "#166534", fontWeight: 700, cursor: "pointer", marginBottom: 8 }}
+                                        >
+                                          📂 Abrir arquivo salvo
+                                        </button>
                                       )}
 
                                       {documento.foiTrocado && documento.ultimaTroca && (
