@@ -34,13 +34,15 @@ import PortalHome from "./portal/PortalHome";
 import PortalAlterarSenha from "./portal/PortalAlterarSenha";
 import PortalProtectedRoute from "./portal/PortalProtectedRoute";
 import PortalCadastrarInstituicao from "./portal/PortalCadastrarInstituicao";
-
+import PortalAdmin from "./portal/PortalAdminPage";
 function App() {
   return (
     <BrowserRouter>
       <Routes>
 
-        {/* PORTAL */}
+        {/* =========================
+            PORTAL DA INSTITUIÇÃO
+        ========================= */}
 
         <Route
           path="/portal"
@@ -70,7 +72,24 @@ function App() {
           }
         />
 
-        {/* LOGIN */}
+        {/* =========================
+            PORTAL ADMINISTRATIVO
+        ========================= */}
+
+        <Route
+          path="/portal/admin"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <PortalAdmin />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* =========================
+            LOGIN
+        ========================= */}
 
         <Route
           path="/login"
@@ -82,7 +101,9 @@ function App() {
           element={<RedefinirSenha />}
         />
 
-        {/* DASHBOARD */}
+        {/* =========================
+            DASHBOARD
+        ========================= */}
 
         <Route
           path="/"
@@ -95,7 +116,9 @@ function App() {
           }
         />
 
-        {/* CLIENTES */}
+        {/* =========================
+            CLIENTES
+        ========================= */}
 
         <Route
           path="/clientes"
@@ -108,7 +131,9 @@ function App() {
           }
         />
 
-        {/* CONTATOS */}
+        {/* =========================
+            CONTATOS
+        ========================= */}
 
         <Route
           path="/contatos"
@@ -121,7 +146,9 @@ function App() {
           }
         />
 
-        {/* RECEITAS */}
+        {/* =========================
+            RECEITAS
+        ========================= */}
 
         <Route
           path="/receitas"
@@ -134,7 +161,9 @@ function App() {
           }
         />
 
-        {/* DESPESAS */}
+        {/* =========================
+            DESPESAS
+        ========================= */}
 
         <Route
           path="/despesas"
@@ -147,7 +176,9 @@ function App() {
           }
         />
 
-        {/* PARCELAS */}
+        {/* =========================
+            PARCELAS
+        ========================= */}
 
         <Route
           path="/parcelas"
@@ -160,7 +191,9 @@ function App() {
           }
         />
 
-        {/* PAGAMENTOS */}
+        {/* =========================
+            PAGAMENTOS
+        ========================= */}
 
         <Route
           path="/pagamentos"
@@ -173,7 +206,9 @@ function App() {
           }
         />
 
-        {/* TAREFAS */}
+        {/* =========================
+            TAREFAS
+        ========================= */}
 
         <Route
           path="/tarefas"
@@ -186,7 +221,9 @@ function App() {
           }
         />
 
-        {/* PESQUISA */}
+        {/* =========================
+            PESQUISA
+        ========================= */}
 
         <Route
           path="/pesquisa"
@@ -199,7 +236,9 @@ function App() {
           }
         />
 
-        {/* EDITAIS */}
+        {/* =========================
+            EDITAIS
+        ========================= */}
 
         <Route
           path="/editais"

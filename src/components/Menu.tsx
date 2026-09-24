@@ -7,18 +7,18 @@ export default function Menu() {
 
   const { logout } = useAuth();
 
-  const menus = [
-    { nome: "📊 Dashboard", rota: "/" },
-    { nome: "👥 Clientes", rota: "/clientes" },
-    { nome: "📞 Contatos", rota: "/contatos" },
-    { nome: "💰 Receitas", rota: "/receitas" },
-    { nome: "💸 Despesas", rota: "/despesas" },
-    { nome: "💳 Parcelas", rota: "/parcelas" },
-    { nome: "🗓️ Tarefas", rota: "/tarefas" },
-    { nome: "🔎 Pesquisa", rota: "/pesquisa" },
-    { nome: "📋 Editais", rota: "/editais" },
-    { nome: "📁 Portal da Instituição", rota: "/portal" },
-  ];
+ const menus = [
+  { nome: "📊 Dashboard", rota: "/" },
+  { nome: "👥 Clientes", rota: "/clientes" },
+  { nome: "📞 Contatos", rota: "/contatos" },
+  { nome: "💰 Receitas", rota: "/receitas" },
+  { nome: "💸 Despesas", rota: "/despesas" },
+  { nome: "💳 Parcelas", rota: "/parcelas" },
+  { nome: "🗓️ Tarefas", rota: "/tarefas" },
+  { nome: "🔎 Pesquisa", rota: "/pesquisa" },
+  { nome: "📋 Editais", rota: "/editais" },
+  { nome: "📁 Portal da Instituição", rota: "/portal/admin" },
+];
 
   async function sair() {
     try {
