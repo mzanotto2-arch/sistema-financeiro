@@ -435,13 +435,6 @@ export default function PortalAdmin() {
     return new Date(data).toLocaleString("pt-BR");
   }
 
-  function formatarTamanho(tamanho: number | null) {
-    if (!tamanho) return "-";
-    if (tamanho < 1024) return `${tamanho} B`;
-    if (tamanho < 1024 * 1024) return `${(tamanho / 1024).toFixed(1)} KB`;
-    return `${(tamanho / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
   function alternarMes(chave: string) {
     setMesesAbertos((atual) => ({
       ...atual,
@@ -560,31 +553,24 @@ export default function PortalAdmin() {
                   Carregando documentos...
                 </div>
               ) : (
-                <div style={{ display: "grid", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
                   {documentosPropostaFiltrados.map((documento) => (
-                    <div key={documento.id} style={{ border: "1px solid #dbe3ef", borderRadius: 10, padding: 16, background: documento.concluido ? "#f0fdf4" : "#f8fafc" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 15, flexWrap: "wrap" }}>
-                        <div style={{ flex: 1, minWidth: 250 }}>
-                          <strong style={{ color: "#1f3c88", fontSize: 16 }}>📄 {documento.nome}</strong>
-                          <div style={{ marginTop: 7, color: "#475569", fontSize: 13, lineHeight: 1.6 }}>
-                            <strong>Status:</strong> {documento.concluido ? "✅ Concluído" : "⏳ Pendente"}<br />
-                            {documento.concluido && <>
-                              📎 Arquivo: {documento.nomeArquivo || "-"}<br />
-                              👤 Enviado por: {documento.enviadoPor || "Usuário do Portal"}<br />
-                              🕐 Enviado em: {formatarData(documento.enviadoEm)}<br />
-                              💾 Tamanho: {formatarTamanho(documento.tamanho)}
-                            </>}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          disabled={!documento.caminhoArquivo}
-                          onClick={() => baixarDocumento(documento)}
-                          style={{ padding: "10px 15px", border: "none", borderRadius: 8, background: documento.caminhoArquivo ? "#16a34a" : "#cbd5e1", color: documento.caminhoArquivo ? "#fff" : "#64748b", fontWeight: 700, cursor: documento.caminhoArquivo ? "pointer" : "not-allowed", whiteSpace: "nowrap" }}
-                        >
-                          {documento.caminhoArquivo ? "📥 Baixar arquivo" : "Aguardando arquivo"}
-                        </button>
+                    <div key={documento.id} style={{ border: "1px solid #dbe3ef", borderRadius: 12, padding: 14, background: documento.concluido ? "#f0fdf4" : "#f8fafc", minWidth: 0 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                        <strong style={{ color: "#1f3c88", fontSize: 15, lineHeight: 1.3 }}>📄 {documento.nome}</strong>
+                        <span style={{ background: documento.concluido ? "#dcfce7" : "#fff3cd", color: documento.concluido ? "#166534" : "#856404", padding: "5px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }}>
+                          {documento.concluido ? "Concluído" : "Pendente"}
+                        </span>
                       </div>
+                      {documento.concluido && (
+                        <div style={{ marginTop: 9, color: "#64748b", fontSize: 11, lineHeight: 1.5 }}>
+                          📎 {documento.nomeArquivo || "Arquivo enviado"}<br />
+                          🕐 {formatarData(documento.enviadoEm)}
+                        </div>
+                      )}
+                      <button type="button" disabled={!documento.caminhoArquivo} onClick={() => baixarDocumento(documento)} style={{ width: "100%", marginTop: 11, padding: "9px 10px", border: "none", borderRadius: 7, background: documento.caminhoArquivo ? "#16a34a" : "#cbd5e1", color: documento.caminhoArquivo ? "#fff" : "#64748b", fontWeight: 700, cursor: documento.caminhoArquivo ? "pointer" : "not-allowed", fontSize: 12 }}>
+                        {documento.caminhoArquivo ? "📥 Baixar arquivo" : "Aguardando arquivo"}
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -654,33 +640,28 @@ export default function PortalAdmin() {
                                   </button>
 
                                   {fornecedorAberto && (
-                                    <div style={{ borderTop: "1px solid #dbe3ef", padding: 15, background: "#fff", display: "grid", gap: 10 }}>
-                                      {fornecedor.documentos.map((documento) => (
-                                        <div key={documento.id} style={{ border: "1px solid #e2e8f0", borderRadius: 9, padding: 14, background: documento.concluido ? "#f0fdf4" : "#f8fafc" }}>
-                                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 15, flexWrap: "wrap" }}>
-                                            <div style={{ flex: 1, minWidth: 240 }}>
-                                              <strong style={{ color: "#334155" }}>📄 {documento.nome}</strong>
-                                              <div style={{ marginTop: 6, color: "#64748b", fontSize: 13, lineHeight: 1.6 }}>
-                                                <strong>Status:</strong> {documento.concluido ? "✅ Concluído" : "⏳ Pendente"}<br />
-                                                {documento.concluido && <>
-                                                  📎 Arquivo: {documento.nomeArquivo || "-"}<br />
-                                                  👤 Enviado por: {documento.enviadoPor || "Usuário do Portal"}<br />
-                                                  🕐 Enviado em: {formatarData(documento.enviadoEm)}<br />
-                                                  💾 Tamanho: {formatarTamanho(documento.tamanho)}
-                                                </>}
-                                              </div>
+                                    <div style={{ borderTop: "1px solid #dbe3ef", padding: 15, background: "#fff" }}>
+                                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+                                        {fornecedor.documentos.map((documento) => (
+                                          <div key={documento.id} style={{ border: "1px solid #dbe3ef", borderRadius: 12, padding: 14, background: documento.concluido ? "#f0fdf4" : "#f8fafc", minWidth: 0 }}>
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                                              <strong style={{ color: "#1e3a8a", fontSize: 14, lineHeight: 1.3 }}>📄 {documento.nome}</strong>
+                                              <span style={{ background: documento.concluido ? "#dcfce7" : "#fff3cd", color: documento.concluido ? "#166534" : "#856404", padding: "5px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }}>
+                                                {documento.concluido ? "Concluído" : "Pendente"}
+                                              </span>
                                             </div>
-                                            <button
-                                              type="button"
-                                              disabled={!documento.caminhoArquivo}
-                                              onClick={() => baixarDocumento(documento)}
-                                              style={{ padding: "10px 15px", border: "none", borderRadius: 8, background: documento.caminhoArquivo ? "#16a34a" : "#cbd5e1", color: documento.caminhoArquivo ? "#fff" : "#64748b", fontWeight: 700, cursor: documento.caminhoArquivo ? "pointer" : "not-allowed", whiteSpace: "nowrap" }}
-                                            >
+                                            {documento.concluido && (
+                                              <div style={{ marginTop: 9, color: "#64748b", fontSize: 11, lineHeight: 1.5 }}>
+                                                📎 {documento.nomeArquivo || "Arquivo enviado"}<br />
+                                                🕐 {formatarData(documento.enviadoEm)}
+                                              </div>
+                                            )}
+                                            <button type="button" disabled={!documento.caminhoArquivo} onClick={() => baixarDocumento(documento)} style={{ width: "100%", marginTop: 11, padding: "9px 10px", border: "none", borderRadius: 7, background: documento.caminhoArquivo ? "#16a34a" : "#cbd5e1", color: documento.caminhoArquivo ? "#fff" : "#64748b", fontWeight: 700, cursor: documento.caminhoArquivo ? "pointer" : "not-allowed", fontSize: 12 }}>
                                               {documento.caminhoArquivo ? "📥 Baixar arquivo" : "Aguardando arquivo"}
                                             </button>
                                           </div>
-                                        </div>
-                                      ))}
+                                        ))}
+                                      </div>
                                     </div>
                                   )}
                                 </div>

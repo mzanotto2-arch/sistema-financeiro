@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../database/supabase";
@@ -9,6 +10,12 @@ export default function PortalLogin() {
   const [senha, setSenha] = useState("");
   const [carregando, setCarregando] = useState(false);
 
+  const [mostrarAlterarSenha, setMostrarAlterarSenha] = useState(false);
+  const [senhaAtual, setSenhaAtual] = useState("");
+  const [novaSenha, setNovaSenha] = useState("");
+  const [confirmarSenha, setConfirmarSenha] = useState("");
+  const [alterandoSenha, setAlterandoSenha] = useState(false);
+
   async function entrar() {
     if (!codigoProposta.trim() || !senha.trim()) {
       alert("Digite o código da proposta e a senha.");
@@ -18,7 +25,6 @@ export default function PortalLogin() {
     try {
       setCarregando(true);
 
-      // Limpa qualquer sessão anterior antes de iniciar um novo acesso.
       sessionStorage.removeItem("portal_codigo_proposta");
       sessionStorage.removeItem("portal_usuario_id");
       sessionStorage.removeItem("portal_instituicao_id");
@@ -31,13 +37,7 @@ export default function PortalLogin() {
         p_senha: senha,
       });
 
-      console.log("Resultado do portal_login:", data);
-      console.log("Erro do portal_login:", error);
-
-      if (error) {
-        console.error("Erro retornado pelo Supabase:", error);
-        throw error;
-      }
+      if (error) throw error;
 
       if (!data || data.length === 0) {
         alert("Código da proposta ou senha inválidos.");
@@ -46,82 +46,111 @@ export default function PortalLogin() {
 
       const usuario = data[0];
 
-      // Confirma que todos os dados necessários foram retornados.
       if (
         !usuario.usuario_id ||
         !usuario.instituicao_id ||
         !usuario.proposta_id ||
         !usuario.codigo_proposta
       ) {
-        console.error(
-          "Dados incompletos retornados pelo portal_login:",
-          usuario
-        );
-
-        alert(
-          "Não foi possível identificar corretamente a instituição e a proposta."
-        );
-
+        alert("Não foi possível identificar a instituição e a proposta.");
         return;
       }
-
-      // ==================================================
-      // SESSÃO DA INSTITUIÇÃO
-      // ==================================================
 
       sessionStorage.setItem(
         "portal_codigo_proposta",
         String(usuario.codigo_proposta)
       );
-
       sessionStorage.setItem(
         "portal_usuario_id",
         String(usuario.usuario_id)
       );
-
       sessionStorage.setItem(
         "portal_instituicao_id",
         String(usuario.instituicao_id)
       );
-
       sessionStorage.setItem(
         "portal_proposta_id",
         String(usuario.proposta_id)
       );
-
       sessionStorage.setItem(
         "portal_nome_usuario",
         String(usuario.nome_usuario || "")
       );
-
       sessionStorage.setItem(
         "portal_nome_instituicao",
         String(usuario.nome_instituicao || "")
       );
 
-      console.log("Sessão do Portal criada:", {
-        codigo_proposta: usuario.codigo_proposta,
-        usuario_id: usuario.usuario_id,
-        instituicao_id: usuario.instituicao_id,
-        proposta_id: usuario.proposta_id,
-        nome_usuario: usuario.nome_usuario,
-        nome_instituicao: usuario.nome_instituicao,
-      });
-
-      // Vai somente para a área protegida do Portal.
       navigate("/portal/documentos", { replace: true });
-
     } catch (error: any) {
       console.error("Erro no login do portal:", error);
-
-      alert(
-        error?.message ||
-          "Não foi possível entrar no Portal da Instituição."
-      );
+      alert(error?.message || "Não foi possível entrar no Portal.");
     } finally {
       setCarregando(false);
     }
   }
+
+  async function alterarSenha() {
+    if (
+      !codigoProposta.trim() ||
+      !senhaAtual ||
+      !novaSenha ||
+      !confirmarSenha
+    ) {
+      alert("Preencha o código da proposta e todos os campos de senha.");
+      return;
+    }
+
+    if (novaSenha.length < 6) {
+      alert("A nova senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+
+    if (novaSenha !== confirmarSenha) {
+      alert("A confirmação da nova senha não confere.");
+      return;
+    }
+
+    try {
+      setAlterandoSenha(true);
+
+      const { data, error } = await supabase.rpc("portal_alterar_senha", {
+        p_codigo_proposta: codigoProposta.trim(),
+        p_senha_atual: senhaAtual,
+        p_nova_senha: novaSenha,
+      });
+
+      if (error) throw error;
+
+      if (data !== true) {
+        throw new Error("Não foi possível alterar a senha. Confira os dados.");
+      }
+
+      alert("Senha alterada com sucesso!");
+
+      setSenha("");
+      setSenhaAtual("");
+      setNovaSenha("");
+      setConfirmarSenha("");
+      setMostrarAlterarSenha(false);
+    } catch (error: any) {
+      console.error("Erro ao alterar senha:", error);
+      alert(error?.message || "Não foi possível alterar a senha.");
+    } finally {
+      setAlterandoSenha(false);
+    }
+  }
+
+  const estiloInput = {
+    width: "100%",
+    padding: 13,
+    border: "1px solid #cbd5e1",
+    borderRadius: 8,
+    boxSizing: "border-box" as const,
+    marginBottom: 16,
+    fontSize: 15,
+    outline: "none",
+  };
 
   return (
     <div
@@ -144,39 +173,17 @@ export default function PortalLogin() {
           borderRadius: 14,
           boxShadow: "0 5px 25px rgba(0,0,0,.12)",
           boxSizing: "border-box",
+          margin: "20px 0",
         }}
       >
-        <div
-          style={{
-            textAlign: "center",
-            marginBottom: 30,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 50,
-              marginBottom: 10,
-            }}
-          >
-            📁
-          </div>
+        <div style={{ textAlign: "center", marginBottom: 30 }}>
+          <div style={{ fontSize: 50, marginBottom: 10 }}>📁</div>
 
-          <h1
-            style={{
-              margin: 0,
-              color: "#1f3c88",
-              fontSize: 28,
-            }}
-          >
+          <h1 style={{ margin: 0, color: "#1f3c88", fontSize: 28 }}>
             Portal da Instituição
           </h1>
 
-          <p
-            style={{
-              color: "#64748b",
-              marginTop: 8,
-            }}
-          >
+          <p style={{ color: "#64748b", marginTop: 8 }}>
             Acesso exclusivo para documentos
           </p>
         </div>
@@ -198,18 +205,9 @@ export default function PortalLogin() {
           value={codigoProposta}
           onChange={(e) => setCodigoProposta(e.target.value)}
           placeholder="Ex.: 277602025"
-          disabled={carregando}
+          disabled={carregando || alterandoSenha}
           autoComplete="username"
-          style={{
-            width: "100%",
-            padding: 13,
-            border: "1px solid #cbd5e1",
-            borderRadius: 8,
-            boxSizing: "border-box",
-            marginBottom: 22,
-            fontSize: 15,
-            outline: "none",
-          }}
+          style={estiloInput}
         />
 
         <label
@@ -229,29 +227,18 @@ export default function PortalLogin() {
           value={senha}
           onChange={(e) => setSenha(e.target.value)}
           placeholder="Digite sua senha"
-          disabled={carregando}
+          disabled={carregando || alterandoSenha}
           autoComplete="current-password"
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              entrar();
-            }
+            if (e.key === "Enter") entrar();
           }}
-          style={{
-            width: "100%",
-            padding: 13,
-            border: "1px solid #cbd5e1",
-            borderRadius: 8,
-            boxSizing: "border-box",
-            marginBottom: 18,
-            fontSize: 15,
-            outline: "none",
-          }}
+          style={estiloInput}
         />
 
         <button
           type="button"
           onClick={entrar}
-          disabled={carregando}
+          disabled={carregando || alterandoSenha}
           style={{
             width: "100%",
             padding: 13,
@@ -266,6 +253,101 @@ export default function PortalLogin() {
         >
           {carregando ? "Entrando..." : "Entrar no Portal"}
         </button>
+
+        <button
+          type="button"
+          onClick={() => setMostrarAlterarSenha(!mostrarAlterarSenha)}
+          style={{
+            width: "100%",
+            marginTop: 12,
+            padding: 12,
+            background: "#fff",
+            color: "#2563eb",
+            border: "1px solid #2563eb",
+            borderRadius: 8,
+            cursor: "pointer",
+            fontWeight: 600,
+            fontSize: 15,
+          }}
+        >
+          {mostrarAlterarSenha ? "Cancelar troca de senha" : "Trocar senha"}
+        </button>
+
+        {mostrarAlterarSenha && (
+          <div
+            style={{
+              marginTop: 20,
+              padding: 16,
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: 8,
+            }}
+          >
+            <h3 style={{ color: "#1f3c88", marginTop: 0 }}>
+              Alterar senha
+            </h3>
+
+            <p style={{ color: "#64748b", fontSize: 13 }}>
+              Informe o código da proposta acima, sua senha atual e a nova
+              senha.
+            </p>
+
+            <label style={{ display: "block", marginBottom: 6 }}>
+              Senha atual
+            </label>
+            <input
+              type="password"
+              value={senhaAtual}
+              onChange={(e) => setSenhaAtual(e.target.value)}
+              autoComplete="current-password"
+              disabled={alterandoSenha}
+              style={estiloInput}
+            />
+
+            <label style={{ display: "block", marginBottom: 6 }}>
+              Nova senha
+            </label>
+            <input
+              type="password"
+              value={novaSenha}
+              onChange={(e) => setNovaSenha(e.target.value)}
+              autoComplete="new-password"
+              disabled={alterandoSenha}
+              style={estiloInput}
+            />
+
+            <label style={{ display: "block", marginBottom: 6 }}>
+              Confirmar nova senha
+            </label>
+            <input
+              type="password"
+              value={confirmarSenha}
+              onChange={(e) => setConfirmarSenha(e.target.value)}
+              autoComplete="new-password"
+              disabled={alterandoSenha}
+              style={estiloInput}
+            />
+
+            <button
+              type="button"
+              onClick={alterarSenha}
+              disabled={alterandoSenha}
+              style={{
+                width: "100%",
+                padding: 13,
+                background: alterandoSenha ? "#93c5fd" : "#16a34a",
+                color: "#fff",
+                border: "none",
+                borderRadius: 8,
+                cursor: alterandoSenha ? "wait" : "pointer",
+                fontWeight: 700,
+                fontSize: 15,
+              }}
+            >
+              {alterandoSenha ? "Alterando..." : "Salvar nova senha"}
+            </button>
+          </div>
+        )}
 
         <div
           style={{
