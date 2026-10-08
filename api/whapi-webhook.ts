@@ -44,6 +44,95 @@ async function enviarMensagem(
   };
 }
 
+// ==========================================
+// LIMPA LINKS REPETIDOS DA RESPOSTA
+// ==========================================
+
+function limparResultadoEditais(
+  texto: string
+): string {
+  const blocos = texto
+    .split(/(?=📌\s*)/)
+    .filter((bloco) => bloco.trim());
+
+  // Se por algum motivo a resposta não tiver
+  // o formato esperado, mantém o texto original.
+  if (blocos.length === 0) {
+    return texto.trim();
+  }
+
+  return blocos
+    .map((bloco) => {
+      // Localiza todos os links presentes no bloco
+      const urls = [
+        ...bloco.matchAll(
+          /https?:\/\/[^\s)\]]+/g
+        ),
+      ].map((match) =>
+        match[0].replace(/[),.;]+$/g, "")
+      );
+
+      // Prioriza links oficiais conhecidos
+      const linkOficial =
+        urls.find((url) =>
+          /gov\.br|zurich\.com\.br/i.test(url)
+        ) || urls[0];
+
+      let textoLimpo = bloco;
+
+      // Remove formatos como:
+      // (gov.br)(https://www.gov.br/...)
+      textoLimpo = textoLimpo.replace(
+        /\([^()\n]{0,100}\)\((https?:\/\/[^)\s]+)\)/g,
+        ""
+      );
+
+      // Remove links Markdown:
+      // [gov.br](https://www.gov.br/...)
+      textoLimpo = textoLimpo.replace(
+        /\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g,
+        ""
+      );
+
+      // Remove URLs restantes
+      textoLimpo = textoLimpo.replace(
+        /https?:\/\/[^\s)\]]+/g,
+        ""
+      );
+
+      // Remove referências simples de fontes oficiais
+      // que ficaram sozinhas depois da retirada do link.
+      textoLimpo = textoLimpo.replace(
+        /\((gov\.br|zurich\.com\.br)\)/gi,
+        ""
+      );
+
+      // Limpa espaços antes das quebras de linha
+      textoLimpo = textoLimpo.replace(
+        /[ \t]+\n/g,
+        "\n"
+      );
+
+      // Evita excesso de linhas vazias
+      textoLimpo = textoLimpo.replace(
+        /\n{3,}/g,
+        "\n\n"
+      );
+
+      textoLimpo = textoLimpo.trim();
+
+      // Coloca UM ÚNICO link oficial no final
+      if (linkOficial) {
+        textoLimpo +=
+          "\n\n🔗 *Edital oficial:*\n" +
+          linkOficial;
+      }
+
+      return textoLimpo;
+    })
+    .join("\n\n");
+}
+
 export default async function handler(
   req: any,
   res: any
@@ -337,12 +426,19 @@ export default async function handler(
       }
 
       // ==========================================
+      // LIMPA E ORGANIZA O RESULTADO
+      // ==========================================
+
+      const resultadoLimpo =
+        limparResultadoEditais(resultado);
+
+      // ==========================================
       // MENSAGEM FINAL
       // ==========================================
 
       const mensagemFinal =
         "📚 *EDITAIS ABERTOS — CLUBE*\n\n" +
-        resultado +
+        resultadoLimpo +
         "\n\n" +
         "⚠️ *Importante:* os prazos devem ser conferidos na fonte oficial antes da submissão.";
 
