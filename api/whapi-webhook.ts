@@ -45,7 +45,7 @@ async function enviarMensagem(
 }
 
 // ==========================================
-// LIMPA LINKS REPETIDOS DA RESPOSTA
+// LIMPA E ORGANIZA A RESPOSTA DOS EDITAIS
 // ==========================================
 
 function limparResultadoEditais(
@@ -55,15 +55,16 @@ function limparResultadoEditais(
     .split(/(?=📌\s*)/)
     .filter((bloco) => bloco.trim());
 
-  // Se por algum motivo a resposta não tiver
-  // o formato esperado, mantém o texto original.
   if (blocos.length === 0) {
     return texto.trim();
   }
 
   return blocos
     .map((bloco) => {
-      // Localiza todos os links presentes no bloco
+      // ==========================================
+      // ENCONTRA TODOS OS LINKS
+      // ==========================================
+
       const urls = [
         ...bloco.matchAll(
           /https?:\/\/[^\s)\]]+/g
@@ -72,7 +73,7 @@ function limparResultadoEditais(
         match[0].replace(/[),.;]+$/g, "")
       );
 
-      // Prioriza links oficiais conhecidos
+      // Prioriza fontes oficiais conhecidas
       const linkOficial =
         urls.find((url) =>
           /gov\.br|zurich\.com\.br/i.test(url)
@@ -80,40 +81,80 @@ function limparResultadoEditais(
 
       let textoLimpo = bloco;
 
-      // Remove formatos como:
-      // (gov.br)(https://www.gov.br/...)
-      textoLimpo = textoLimpo.replace(
-        /\([^()\n]{0,100}\)\((https?:\/\/[^)\s]+)\)/g,
-        ""
-      );
+      // ==========================================
+      // REMOVE LINKS NO FORMATO:
+      // [gov.br](https://...)
+      // ==========================================
 
-      // Remove links Markdown:
-      // [gov.br](https://www.gov.br/...)
       textoLimpo = textoLimpo.replace(
         /\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g,
         ""
       );
 
-      // Remove URLs restantes
+      // ==========================================
+      // REMOVE LINKS NO FORMATO:
+      // (gov.br)(https://...)
+      // ==========================================
+
+      textoLimpo = textoLimpo.replace(
+        /\([^()\n]{0,100}\)\((https?:\/\/[^)\s]+)\)/g,
+        ""
+      );
+
+      // ==========================================
+      // REMOVE TODAS AS URLs DO TEXTO
+      // ==========================================
+
       textoLimpo = textoLimpo.replace(
         /https?:\/\/[^\s)\]]+/g,
         ""
       );
 
-      // Remove referências simples de fontes oficiais
-      // que ficaram sozinhas depois da retirada do link.
+      // ==========================================
+      // REMOVE "Edital oficial" GERADO PELA OPENAI
+      // PARA NÃO FICAR DUPLICADO
+      // ==========================================
+
       textoLimpo = textoLimpo.replace(
-        /\((gov\.br|zurich\.com\.br)\)/gi,
+        /🔗\s*\*{0,2}Edital oficial:?\*{0,2}\s*/gi,
         ""
       );
 
-      // Limpa espaços antes das quebras de linha
+      textoLimpo = textoLimpo.replace(
+        /\*{0,2}Edital oficial:?\*{0,2}\s*/gi,
+        ""
+      );
+
+      // ==========================================
+      // REMOVE REFERÊNCIAS SOLTAS COMO:
+      // (gov.br)
+      // (zurich.com.br)
+      // ==========================================
+
+      textoLimpo = textoLimpo.replace(
+        /\(\s*(gov\.br|zurich\.com\.br)\s*\)/gi,
+        ""
+      );
+
+      // ==========================================
+      // REMOVE PARÊNTESES VAZIOS:
+      // ()
+      // ==========================================
+
+      textoLimpo = textoLimpo.replace(
+        /\(\s*\)/g,
+        ""
+      );
+
+      // ==========================================
+      // LIMPEZA DE ESPAÇOS
+      // ==========================================
+
       textoLimpo = textoLimpo.replace(
         /[ \t]+\n/g,
         "\n"
       );
 
-      // Evita excesso de linhas vazias
       textoLimpo = textoLimpo.replace(
         /\n{3,}/g,
         "\n\n"
@@ -121,7 +162,10 @@ function limparResultadoEditais(
 
       textoLimpo = textoLimpo.trim();
 
-      // Coloca UM ÚNICO link oficial no final
+      // ==========================================
+      // COLOCA SOMENTE UM LINK OFICIAL NO FINAL
+      // ==========================================
+
       if (linkOficial) {
         textoLimpo +=
           "\n\n🔗 *Edital oficial:*\n" +
@@ -431,6 +475,11 @@ export default async function handler(
 
       const resultadoLimpo =
         limparResultadoEditais(resultado);
+
+      console.log(
+        "Resultado após limpeza:",
+        resultadoLimpo
+      );
 
       // ==========================================
       // MENSAGEM FINAL
