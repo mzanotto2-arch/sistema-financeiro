@@ -224,13 +224,17 @@ export default async function handler(
       const openAIResult =
         await openAIResponse.json();
 
+      // ==========================================
+      // LOGS DA OPENAI
+      // ==========================================
+
       console.log(
         "Status OpenAI:",
         openAIResponse.status
       );
 
       console.log(
-        "Resposta da OpenAI:",
+        "Resposta completa da OpenAI:",
         JSON.stringify(
           openAIResult,
           null,
@@ -258,17 +262,59 @@ export default async function handler(
       }
 
       // ==========================================
-      // PEGA O TEXTO DA RESPOSTA
+      // EXTRAI O TEXTO DA RESPOSTA
       // ==========================================
 
-      const resultado =
+      let resultado = "";
+
+      // Primeiro tenta output_text
+      if (
         typeof openAIResult?.output_text ===
         "string"
-          ? openAIResult.output_text.trim()
-          : "";
+      ) {
+        resultado =
+          openAIResult.output_text.trim();
+      }
+
+      // Se não encontrou, percorre output[].content[]
+      if (
+        !resultado &&
+        Array.isArray(openAIResult?.output)
+      ) {
+        const partesTexto =
+          openAIResult.output.flatMap(
+            (item: any) => {
+              if (
+                !Array.isArray(
+                  item?.content
+                )
+              ) {
+                return [];
+              }
+
+              return item.content
+                .filter(
+                  (content: any) =>
+                    content?.type ===
+                      "output_text" &&
+                    typeof content?.text ===
+                      "string"
+                )
+                .map(
+                  (content: any) =>
+                    content.text
+                );
+            }
+          );
+
+        resultado =
+          partesTexto
+            .join("\n")
+            .trim();
+      }
 
       console.log(
-        "Texto final da OpenAI:",
+        "Texto final extraído da OpenAI:",
         resultado
       );
 
@@ -277,6 +323,10 @@ export default async function handler(
       // ==========================================
 
       if (!resultado) {
+        console.error(
+          "A OpenAI respondeu, mas nenhum texto foi encontrado."
+        );
+
         await enviarMensagem(
           chatId,
           "📚 *Nenhum edital confirmado neste momento.*\n\n" +
@@ -315,6 +365,7 @@ export default async function handler(
         return res.status(500).json({
           error:
             "Erro ao enviar os editais pelo Whapi",
+
           details:
             envioFinal.result,
         });
@@ -338,6 +389,7 @@ export default async function handler(
     return res.status(500).json({
       error:
         "Erro interno no webhook Whapi",
+
       details:
         error?.message ||
         "Erro desconhecido",
