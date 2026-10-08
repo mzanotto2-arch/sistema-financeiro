@@ -10,7 +10,41 @@ const WHAPI_URL =
 const OPENAI_URL =
   "https://api.openai.com/v1/responses";
 
-export default async function handler(req: any, res: any) {
+async function enviarMensagem(
+  chatId: string,
+  body: string
+) {
+  const response = await fetch(WHAPI_URL, {
+    method: "POST",
+
+    headers: {
+      Authorization: `Bearer ${WHAPI_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+
+    body: JSON.stringify({
+      to: chatId,
+      body,
+    }),
+  });
+
+  const result = await response.json();
+
+  console.log(
+    "Resposta do Whapi:",
+    JSON.stringify(result, null, 2)
+  );
+
+  return {
+    response,
+    result,
+  };
+}
+
+export default async function handler(
+  req: any,
+  res: any
+) {
   // ==========================================
   // VERIFICAÇÃO DO WEBHOOK PELA WHAPI
   // ==========================================
@@ -34,7 +68,9 @@ export default async function handler(req: any, res: any) {
     // ==========================================
     // RECEBE AS MENSAGENS
     // ==========================================
-    const messages = Array.isArray(req.body?.messages)
+    const messages = Array.isArray(
+      req.body?.messages
+    )
       ? req.body.messages
       : [];
 
@@ -45,7 +81,7 @@ export default async function handler(req: any, res: any) {
     }
 
     // ==========================================
-    // PROCESSA CADA MENSAGEM
+    // PROCESSA AS MENSAGENS
     // ==========================================
     for (const message of messages) {
       // Ignora mensagens enviadas pelo próprio bot
@@ -53,7 +89,7 @@ export default async function handler(req: any, res: any) {
         continue;
       }
 
-      // Trabalhamos somente com texto
+      // Trabalha somente com texto
       if (message?.type !== "text") {
         continue;
       }
@@ -66,19 +102,28 @@ export default async function handler(req: any, res: any) {
         .trim()
         .toLowerCase();
 
-      console.log("Mensagem recebida:", {
-        chatId,
-        texto,
-      });
+      console.log(
+        "Mensagem recebida:",
+        {
+          chatId,
+          texto,
+        }
+      );
 
       // ==========================================
-      // SÓ RESPONDE AO COMANDO NO GRUPO
+      // SÓ RESPONDE EM GRUPOS
       // ==========================================
       if (
         !chatId ||
-        !chatId.endsWith("@g.us") ||
-        texto !== "@editalcultura"
+        !chatId.endsWith("@g.us")
       ) {
+        continue;
+      }
+
+      // ==========================================
+      // COMANDO PRINCIPAL
+      // ==========================================
+      if (texto !== "@editalcultura") {
         continue;
       }
 
@@ -113,41 +158,15 @@ export default async function handler(req: any, res: any) {
       // ==========================================
       // AVISA QUE A PESQUISA COMEÇOU
       // ==========================================
-      const avisoResponse = await fetch(
-        WHAPI_URL,
-        {
-          method: "POST",
-
-          headers: {
-            Authorization:
-              `Bearer ${WHAPI_TOKEN}`,
-            "Content-Type":
-              "application/json",
-          },
-
-          body: JSON.stringify({
-            to: chatId,
-            body:
-              "🔎 Pesquisando os editais abertos...\n\n" +
-              "Aguarde um momento. Vou buscar oportunidades atuais para OSCs, cultura e terceiro setor.",
-          }),
-        }
-      );
-
-      const avisoResult =
-        await avisoResponse.json();
-
-      console.log(
-        "Aviso enviado:",
-        JSON.stringify(
-          avisoResult,
-          null,
-          2
-        )
+      await enviarMensagem(
+        chatId,
+        "🔎 *Pesquisando editais abertos...*\n\n" +
+        "Estou verificando oportunidades atuais para OSCs e projetos do terceiro setor.\n\n" +
+        "Só vou enviar oportunidades com inscrição aberta e prazo de submissão confirmado."
       );
 
       // ==========================================
-      // PESQUISA OS EDITAIS NA INTERNET
+      // PESQUISA ATUAL NA INTERNET
       // ==========================================
       const openAIResponse = await fetch(
         OPENAI_URL,
@@ -162,74 +181,106 @@ export default async function handler(req: any, res: any) {
           },
 
           body: JSON.stringify({
-            model: "gpt-5",
+            model: "gpt-5.6-luna",
 
             tools: [
               {
                 type: "web_search",
-                search_context_size:
-                  "high",
+                search_context_size: "medium",
               },
             ],
 
+            max_output_tokens: 2200,
+
             input: `
-Você é o pesquisador oficial de editais do Clube.
+Você é o pesquisador oficial de oportunidades do Clube de Captação de Recursos.
 
-Sua função é pesquisar na internet, neste momento, oportunidades de editais e chamadas públicas que estejam ABERTAS para inscrição.
+DATA ATUAL:
+Use a data atual da internet para verificar os prazos.
 
-O público do Clube é formado principalmente por:
-- OSCs;
-- associações;
-- institutos;
-- fundações;
-- organizações do terceiro setor;
-- projetos culturais;
-- projetos sociais;
-- projetos esportivos;
-- projetos de inclusão;
-- projetos educacionais.
+OBJETIVO DESTA PESQUISA:
+Encontrar oportunidades de financiamento, editais, chamadas públicas, prêmios, patrocínios e oportunidades de apoio financeiro que estejam ABERTAS AGORA para organizações da sociedade civil e projetos do terceiro setor.
 
-PRIORIDADE:
-1. Brasil;
-2. Editais nacionais;
-3. Editais estaduais;
-4. Editais municipais;
-5. Oportunidades privadas de institutos, fundações e empresas;
-6. Leis de incentivo e chamadas públicas quando houver inscrição aberta.
+A busca inicial é GERAL e NACIONAL.
 
-NÃO inclua:
-- editais encerrados;
-- editais com prazo vencido;
-- notícias antigas sem inscrição aberta;
-- oportunidades que sejam exclusivamente para pessoas físicas quando OSCs não puderem participar;
-- informações sem fonte confiável;
-- oportunidades que você não consiga confirmar como atuais.
+PRIORIZE:
+- OSCs
+- associações
+- institutos
+- fundações
+- organizações do terceiro setor
+- projetos sociais
+- projetos culturais
+- projetos esportivos
+- projetos educacionais
+- inclusão
+- meio ambiente
+- direitos humanos
+- desenvolvimento social
+- audiovisual
+- leis de incentivo
+- institutos e fundações privadas
+- empresas com chamadas públicas
 
-Dê preferência às fontes oficiais do órgão, ministério, secretaria, instituto, fundação ou empresa responsável pelo edital.
+REGRA ABSOLUTA DE VALIDADE:
 
-Pesquise agora pelos editais abertos e relevantes.
+NÃO inclua uma oportunidade se:
+- o prazo de inscrição já terminou;
+- a chamada ainda não abriu;
+- a página oficial não confirmar que as inscrições estão abertas;
+- não for possível confirmar a data limite de submissão;
+- for apenas uma notícia sobre uma oportunidade antiga;
+- for resultado de edital;
+- for uma oportunidade exclusivamente para pessoa física quando OSCs não puderem participar.
 
-Para cada oportunidade encontrada, informe:
+Só considere uma oportunidade como ABERTA se houver informação atual e verificável indicando que ela pode receber inscrições na data da pesquisa.
 
-📌 NOME DO EDITAL
-🏛️ INSTITUIÇÃO
-🎯 OBJETIVO
-👥 QUEM PODE PARTICIPAR
-💰 VALOR / PREMIAÇÃO, quando disponível
-📅 PRAZO DE INSCRIÇÃO
-🔗 LINK OFICIAL
+Dê preferência à fonte oficial do órgão, ministério, secretaria, instituto, fundação ou empresa responsável.
 
-Encontre de 3 a 5 oportunidades realmente relevantes.
+ENCONTRE NO MÁXIMO 3 OPORTUNIDADES.
+
+É melhor encontrar 1 oportunidade excelente e confirmada do que enviar várias oportunidades duvidosas.
+
+Para cada oportunidade, apresente exatamente neste formato:
+
+📌 NOME DO EDITAL:
+🏛️ INSTITUIÇÃO:
+🎯 RESUMO:
+👥 QUEM PODE PARTICIPAR:
+💰 VALOR:
+📍 ABRANGÊNCIA:
+📅 ABERTURA DAS INSCRIÇÕES:
+⏰ DATA LIMITE PARA SUBMISSÃO:
+⭐ POR QUE PODE INTERESSAR:
+🔗 LINK OFICIAL:
+
+O RESUMO deve ser curto e muito claro.
+
+A pessoa precisa conseguir entender rapidamente:
+1. o que é;
+2. quem pode participar;
+3. quanto pode receber;
+4. qual projeto pode apresentar;
+5. até quando pode enviar.
 
 IMPORTANTE:
-- Não invente informações.
-- Se uma informação não estiver disponível, diga "não informado".
-- Confirme que o prazo ainda está aberto na data atual.
-- Use somente oportunidades que façam sentido para OSCs, cultura, projetos sociais, terceiro setor ou áreas relacionadas.
-- No final, coloque uma pequena observação dizendo que os prazos devem ser conferidos no edital oficial.
+- Não invente valores.
+- Não invente datas.
+- Não invente requisitos.
+- Se uma informação não estiver disponível, não complete por suposição.
+- Confirme o prazo na fonte oficial.
+- O link deve ser o link oficial da oportunidade.
+- Não envie links de páginas agregadoras quando houver página oficial disponível.
 
-Escreva a resposta em português do Brasil.
-Seja objetivo e organize a resposta para ser enviada em um grupo de WhatsApp.
+Se encontrar menos de 3 oportunidades válidas, envie somente as que conseguir confirmar.
+
+Se não encontrar nenhuma oportunidade com inscrição comprovadamente aberta, responda:
+
+"Neste momento não encontrei uma oportunidade com inscrição comprovadamente aberta e prazo confirmado que atenda ao perfil do Clube."
+
+Não diga que encontrou uma oportunidade se não conseguiu confirmar o prazo.
+
+Responda em português do Brasil.
             `,
           }),
         }
@@ -237,6 +288,11 @@ Seja objetivo e organize a resposta para ser enviada em um grupo de WhatsApp.
 
       const openAIResult =
         await openAIResponse.json();
+
+      console.log(
+        "Status OpenAI:",
+        openAIResponse.status
+      );
 
       console.log(
         "Resposta da OpenAI:",
@@ -248,7 +304,7 @@ Seja objetivo e organize a resposta para ser enviada em um grupo de WhatsApp.
       );
 
       // ==========================================
-      // VERIFICA ERRO DA OPENAI
+      // ERRO NA OPENAI
       // ==========================================
       if (!openAIResponse.ok) {
         console.error(
@@ -256,126 +312,71 @@ Seja objetivo e organize a resposta para ser enviada em um grupo de WhatsApp.
           openAIResult
         );
 
-        const erroResponse =
-          await fetch(
-            WHAPI_URL,
-            {
-              method: "POST",
-
-              headers: {
-                Authorization:
-                  `Bearer ${WHAPI_TOKEN}`,
-                "Content-Type":
-                  "application/json",
-              },
-
-              body: JSON.stringify({
-                to: chatId,
-                body:
-                  "⚠️ Não consegui concluir a pesquisa dos editais agora.\n\n" +
-                  "Tente novamente em alguns instantes.",
-              }),
-            }
-          );
-
-        await erroResponse.json();
-
-        continue;
-      }
-
-      // ==========================================
-      // PEGA O TEXTO GERADO PELA OPENAI
-      // ==========================================
-      const resultado =
-        openAIResult?.output_text ||
-        "";
-
-      // ==========================================
-      // SE NÃO HOUVE RESULTADO
-      // ==========================================
-      if (!resultado.trim()) {
-        const vazioResponse =
-          await fetch(
-            WHAPI_URL,
-            {
-              method: "POST",
-
-              headers: {
-                Authorization:
-                  `Bearer ${WHAPI_TOKEN}`,
-                "Content-Type":
-                  "application/json",
-              },
-
-              body: JSON.stringify({
-                to: chatId,
-                body:
-                  "📚 Não encontrei editais abertos que atendam aos critérios neste momento.\n\n" +
-                  "Tente novamente mais tarde.",
-              }),
-            }
-          );
-
-        await vazioResponse.json();
-
-        continue;
-      }
-
-      // ==========================================
-      // ENVIA OS EDITAIS PARA O MESMO GRUPO
-      // ==========================================
-      const mensagemFinal =
-        "📚 *EDITAIS ABERTOS — CLUBE*\n\n" +
-        resultado.trim() +
-        "\n\n" +
-        "⚠️ *Atenção:* confirme sempre o prazo, os requisitos e as condições diretamente no edital oficial antes de realizar a inscrição.";
-
-      const respostaFinal =
-        await fetch(
-          WHAPI_URL,
-          {
-            method: "POST",
-
-            headers: {
-              Authorization:
-                `Bearer ${WHAPI_TOKEN}`,
-              "Content-Type":
-                "application/json",
-            },
-
-            body: JSON.stringify({
-              to: chatId,
-              body: mensagemFinal,
-            }),
-          }
+        await enviarMensagem(
+          chatId,
+          "⚠️ Tive um problema ao consultar os editais agora.\n\n" +
+          "Nenhuma oportunidade foi publicada sem verificação."
         );
 
-      const resultadoFinal =
-        await respostaFinal.json();
+        continue;
+      }
+
+      // ==========================================
+      // PEGA O TEXTO DA RESPOSTA
+      // ==========================================
+      const resultado =
+        typeof openAIResult?.output_text ===
+        "string"
+          ? openAIResult.output_text.trim()
+          : "";
 
       console.log(
-        "Editais enviados para o grupo:",
-        JSON.stringify(
-          resultadoFinal,
-          null,
-          2
-        )
+        "Texto final da OpenAI:",
+        resultado
       );
 
       // ==========================================
-      // VERIFICA ERRO NO WHAPI
+      // NENHUM RESULTADO
       // ==========================================
-      if (!respostaFinal.ok) {
+      if (!resultado) {
+        await enviarMensagem(
+          chatId,
+          "📚 *Nenhum edital confirmado neste momento.*\n\n" +
+          "Não encontrei uma oportunidade com inscrição comprovadamente aberta e prazo de submissão confirmado."
+        );
+
+        continue;
+      }
+
+      // ==========================================
+      // MENSAGEM FINAL
+      // ==========================================
+      const mensagemFinal =
+        "📚 *EDITAIS ABERTOS — CLUBE*\n\n" +
+        resultado +
+        "\n\n" +
+        "⚠️ *Importante:* os prazos devem ser conferidos na fonte oficial antes da submissão.";
+
+      const envioFinal =
+        await enviarMensagem(
+          chatId,
+          mensagemFinal
+        );
+
+      // ==========================================
+      // ERRO NO ENVIO FINAL
+      // ==========================================
+      if (!envioFinal.response.ok) {
         console.error(
-          "Erro ao enviar editais:",
-          resultadoFinal
+          "Erro ao enviar resultado:",
+          envioFinal.result
         );
 
         return res.status(500).json({
           error:
             "Erro ao enviar os editais pelo Whapi",
           details:
-            resultadoFinal,
+            envioFinal.result,
         });
       }
     }
