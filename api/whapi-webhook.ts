@@ -4,6 +4,9 @@ const WHAPI_TOKEN =
 const OPENAI_API_KEY =
   (globalThis as any).process?.env?.OPENAI_API_KEY || "";
 
+const OPENAI_PROMPT_ID =
+  (globalThis as any).process?.env?.OPENAI_PROMPT_ID || "";
+
 const WHAPI_URL =
   "https://gate.whapi.cloud/messages/text";
 
@@ -48,6 +51,7 @@ export default async function handler(
   // ==========================================
   // VERIFICAÇÃO DO WEBHOOK PELA WHAPI
   // ==========================================
+
   if (req.method === "GET") {
     return res.status(200).json({
       ok: true,
@@ -58,6 +62,7 @@ export default async function handler(
   // ==========================================
   // ACEITA SOMENTE POST
   // ==========================================
+
   if (req.method !== "POST") {
     return res.status(405).json({
       error: "Método não permitido",
@@ -68,6 +73,7 @@ export default async function handler(
     // ==========================================
     // RECEBE AS MENSAGENS
     // ==========================================
+
     const messages = Array.isArray(
       req.body?.messages
     )
@@ -83,6 +89,7 @@ export default async function handler(
     // ==========================================
     // PROCESSA AS MENSAGENS
     // ==========================================
+
     for (const message of messages) {
       // Ignora mensagens enviadas pelo próprio bot
       if (message?.from_me) {
@@ -113,6 +120,7 @@ export default async function handler(
       // ==========================================
       // SÓ RESPONDE EM GRUPOS
       // ==========================================
+
       if (
         !chatId ||
         !chatId.endsWith("@g.us")
@@ -123,6 +131,7 @@ export default async function handler(
       // ==========================================
       // COMANDO PRINCIPAL
       // ==========================================
+
       if (texto !== "@editalcultura") {
         continue;
       }
@@ -130,6 +139,7 @@ export default async function handler(
       // ==========================================
       // VERIFICA WHAPI TOKEN
       // ==========================================
+
       if (!WHAPI_TOKEN) {
         console.error(
           "WHAPI_TOKEN não configurado."
@@ -144,6 +154,7 @@ export default async function handler(
       // ==========================================
       // VERIFICA OPENAI API KEY
       // ==========================================
+
       if (!OPENAI_API_KEY) {
         console.error(
           "OPENAI_API_KEY não configurada."
@@ -156,8 +167,24 @@ export default async function handler(
       }
 
       // ==========================================
+      // VERIFICA PROMPT ID
+      // ==========================================
+
+      if (!OPENAI_PROMPT_ID) {
+        console.error(
+          "OPENAI_PROMPT_ID não configurado."
+        );
+
+        return res.status(500).json({
+          error:
+            "OPENAI_PROMPT_ID não configurado",
+        });
+      }
+
+      // ==========================================
       // AVISA QUE A PESQUISA COMEÇOU
       // ==========================================
+
       await enviarMensagem(
         chatId,
         "🔎 *Pesquisando editais abertos...*\n\n" +
@@ -166,8 +193,9 @@ export default async function handler(
       );
 
       // ==========================================
-      // PESQUISA ATUAL NA INTERNET
+      // CONSULTA O PROMPT PUBLICADO DA OPENAI
       // ==========================================
+
       const openAIResponse = await fetch(
         OPENAI_URL,
         {
@@ -181,107 +209,14 @@ export default async function handler(
           },
 
           body: JSON.stringify({
-            model: "gpt-5.6-luna",
+            prompt: {
+              id: OPENAI_PROMPT_ID,
+            },
 
-            tools: [
-              {
-                type: "web_search",
-                search_context_size: "medium",
-              },
-            ],
+            input:
+              "Execute agora a pesquisa geral e nacional de oportunidades para o Clube de Captação de Recursos. Pesquise na web neste momento e retorne somente oportunidades com inscrições comprovadamente abertas e prazo de submissão confirmado.",
 
             max_output_tokens: 2200,
-
-            input: `
-Você é o pesquisador oficial de oportunidades do Clube de Captação de Recursos.
-
-DATA ATUAL:
-Use a data atual da internet para verificar os prazos.
-
-OBJETIVO DESTA PESQUISA:
-Encontrar oportunidades de financiamento, editais, chamadas públicas, prêmios, patrocínios e oportunidades de apoio financeiro que estejam ABERTAS AGORA para organizações da sociedade civil e projetos do terceiro setor.
-
-A busca inicial é GERAL e NACIONAL.
-
-PRIORIZE:
-- OSCs
-- associações
-- institutos
-- fundações
-- organizações do terceiro setor
-- projetos sociais
-- projetos culturais
-- projetos esportivos
-- projetos educacionais
-- inclusão
-- meio ambiente
-- direitos humanos
-- desenvolvimento social
-- audiovisual
-- leis de incentivo
-- institutos e fundações privadas
-- empresas com chamadas públicas
-
-REGRA ABSOLUTA DE VALIDADE:
-
-NÃO inclua uma oportunidade se:
-- o prazo de inscrição já terminou;
-- a chamada ainda não abriu;
-- a página oficial não confirmar que as inscrições estão abertas;
-- não for possível confirmar a data limite de submissão;
-- for apenas uma notícia sobre uma oportunidade antiga;
-- for resultado de edital;
-- for uma oportunidade exclusivamente para pessoa física quando OSCs não puderem participar.
-
-Só considere uma oportunidade como ABERTA se houver informação atual e verificável indicando que ela pode receber inscrições na data da pesquisa.
-
-Dê preferência à fonte oficial do órgão, ministério, secretaria, instituto, fundação ou empresa responsável.
-
-ENCONTRE NO MÁXIMO 3 OPORTUNIDADES.
-
-É melhor encontrar 1 oportunidade excelente e confirmada do que enviar várias oportunidades duvidosas.
-
-Para cada oportunidade, apresente exatamente neste formato:
-
-📌 NOME DO EDITAL:
-🏛️ INSTITUIÇÃO:
-🎯 RESUMO:
-👥 QUEM PODE PARTICIPAR:
-💰 VALOR:
-📍 ABRANGÊNCIA:
-📅 ABERTURA DAS INSCRIÇÕES:
-⏰ DATA LIMITE PARA SUBMISSÃO:
-⭐ POR QUE PODE INTERESSAR:
-🔗 LINK OFICIAL:
-
-O RESUMO deve ser curto e muito claro.
-
-A pessoa precisa conseguir entender rapidamente:
-1. o que é;
-2. quem pode participar;
-3. quanto pode receber;
-4. qual projeto pode apresentar;
-5. até quando pode enviar.
-
-IMPORTANTE:
-- Não invente valores.
-- Não invente datas.
-- Não invente requisitos.
-- Se uma informação não estiver disponível, não complete por suposição.
-- Confirme o prazo na fonte oficial.
-- O link deve ser o link oficial da oportunidade.
-- Não envie links de páginas agregadoras quando houver página oficial disponível.
-
-Se encontrar menos de 3 oportunidades válidas, envie somente as que conseguir confirmar.
-
-Se não encontrar nenhuma oportunidade com inscrição comprovadamente aberta, responda:
-
-"Neste momento não encontrei uma oportunidade com inscrição comprovadamente aberta e prazo confirmado que atenda ao perfil do Clube."
-
-Não diga que encontrou uma oportunidade se não conseguiu confirmar o prazo.
-
-Responda em português do Brasil.
-            `,
           }),
         }
       );
@@ -306,6 +241,7 @@ Responda em português do Brasil.
       // ==========================================
       // ERRO NA OPENAI
       // ==========================================
+
       if (!openAIResponse.ok) {
         console.error(
           "Erro na OpenAI:",
@@ -324,6 +260,7 @@ Responda em português do Brasil.
       // ==========================================
       // PEGA O TEXTO DA RESPOSTA
       // ==========================================
+
       const resultado =
         typeof openAIResult?.output_text ===
         "string"
@@ -338,6 +275,7 @@ Responda em português do Brasil.
       // ==========================================
       // NENHUM RESULTADO
       // ==========================================
+
       if (!resultado) {
         await enviarMensagem(
           chatId,
@@ -351,6 +289,7 @@ Responda em português do Brasil.
       // ==========================================
       // MENSAGEM FINAL
       // ==========================================
+
       const mensagemFinal =
         "📚 *EDITAIS ABERTOS — CLUBE*\n\n" +
         resultado +
@@ -366,6 +305,7 @@ Responda em português do Brasil.
       // ==========================================
       // ERRO NO ENVIO FINAL
       // ==========================================
+
       if (!envioFinal.response.ok) {
         console.error(
           "Erro ao enviar resultado:",
@@ -384,6 +324,7 @@ Responda em português do Brasil.
     // ==========================================
     // FINALIZADO
     // ==========================================
+
     return res.status(200).json({
       received: true,
     });
