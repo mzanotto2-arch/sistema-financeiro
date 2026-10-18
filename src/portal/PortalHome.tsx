@@ -37,54 +37,21 @@ type MesPagamento = {
 };
 
 const documentosIniciais: Documento[] = [
-  {
-    id: 1,
-    nome: "Estatuto",
-    tipo: "arquivo",
-    status: "Pendente",
-  },
-  {
-    id: 2,
-    nome: "Portfólio",
-    tipo: "arquivo",
-    status: "Pendente",
-  },
-  {
-    id: 3,
-    nome: "CNPJ",
-    tipo: "arquivo",
-    status: "Pendente",
-  },
-  {
-    id: 4,
-    nome: "Certidões",
-    tipo: "arquivo",
-    status: "Pendente",
-  },
-  {
-    id: 5,
-    nome: "Declarações",
-    tipo: "arquivo",
-    status: "Pendente",
-  },
-  {
-    id: 6,
-    nome: "Fotos",
-    tipo: "arquivo",
-    status: "Pendente",
-  },
-  {
-    id: 7,
-    nome: "Documentos bancários",
-    tipo: "arquivo",
-    status: "Pendente",
-  },
-  {
-    id: 8,
-    nome: "Site da instituição",
-    tipo: "link",
-    status: "Pendente",
-  },
+  { id: 1, nome: "Papel timbrado", tipo: "arquivo", status: "Pendente" },
+  { id: 2, nome: "Ata de eleição e posse da diretoria vigente", tipo: "arquivo", status: "Pendente" },
+  { id: 3, nome: "Estatuto social atualizado e alterações", tipo: "arquivo", status: "Pendente" },
+  { id: 4, nome: "Comprovante de endereço do presidente", tipo: "arquivo", status: "Pendente" },
+  { id: 5, nome: "Comprovante de endereço da instituição", tipo: "arquivo", status: "Pendente" },
+  { id: 6, nome: "RG ou CNH e CPF do representante legal", tipo: "arquivo", status: "Pendente" },
+  { id: 7, nome: "Currículo do presidente ou representante legal", tipo: "arquivo", status: "Pendente" },
+  { id: 8, nome: "Currículo institucional ou portfólio e fotos", tipo: "arquivo", status: "Pendente" },
+  { id: 9, nome: "Cartão CNPJ atualizado", tipo: "arquivo", status: "Pendente" },
+  { id: 10, nome: "Relação atualizada dos dirigentes", tipo: "arquivo", status: "Pendente" },
+  { id: 11, nome: "Registro em conselhos, quando exigido", tipo: "arquivo", status: "Pendente" },
+  { id: 12, nome: "Procuração ou documento de representação, quando aplicável", tipo: "arquivo", status: "Pendente" },
+  { id: 13, nome: "Planilha orçamentária do projeto", tipo: "arquivo", status: "Pendente" },
+  { id: 14, nome: "Site da instituição", tipo: "link", status: "Pendente" },
+  { id: 15, nome: "Redes sociais da instituição", tipo: "link", status: "Pendente" },
 ];
 
 const documentosPagamentoIniciais = (): Documento[] => [
