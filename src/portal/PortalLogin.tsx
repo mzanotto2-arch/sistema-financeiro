@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../database/supabase";
@@ -9,103 +8,109 @@ export default function PortalLogin() {
   const [codigoProposta, setCodigoProposta] = useState("");
   const [senha, setSenha] = useState("");
   const [carregando, setCarregando] = useState(false);
-
   const [mostrarAlterarSenha, setMostrarAlterarSenha] = useState(false);
   const [senhaAtual, setSenhaAtual] = useState("");
   const [novaSenha, setNovaSenha] = useState("");
   const [confirmarSenha, setConfirmarSenha] = useState("");
   const [alterandoSenha, setAlterandoSenha] = useState(false);
 
+  function limparSessaoPortal() {
+    sessionStorage.removeItem("portal_codigo_proposta");
+    sessionStorage.removeItem("portal_usuario_id");
+    sessionStorage.removeItem("portal_instituicao_id");
+    sessionStorage.removeItem("portal_proposta_id");
+    sessionStorage.removeItem("portal_nome_usuario");
+    sessionStorage.removeItem("portal_nome_instituicao");
+    sessionStorage.removeItem("portal_tipo_usuario");
+    sessionStorage.removeItem("portal_sessao_token");
+  }
+
   async function entrar() {
-    if (!codigoProposta.trim() || !senha.trim()) {
+    if (!codigoProposta.trim() || !senha) {
       alert("Digite o código da proposta e a senha.");
       return;
     }
 
     try {
       setCarregando(true);
-
-      sessionStorage.removeItem("portal_codigo_proposta");
-      sessionStorage.removeItem("portal_usuario_id");
-      sessionStorage.removeItem("portal_instituicao_id");
-      sessionStorage.removeItem("portal_proposta_id");
-      sessionStorage.removeItem("portal_nome_usuario");
-      sessionStorage.removeItem("portal_nome_instituicao");
+      limparSessaoPortal();
+      setMostrarAlterarSenha(false);
+      setSenhaAtual("");
+      setNovaSenha("");
+      setConfirmarSenha("");
 
       const { data, error } = await supabase.rpc("portal_login", {
         p_codigo_proposta: codigoProposta.trim(),
         p_senha: senha,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Erro retornado pelo portal_login:", error);
+        throw new Error(
+          "Não foi possível validar o acesso. Tente novamente. Se o erro continuar, será necessário conferir a função de login no Supabase."
+        );
+      }
 
-      if (!data || data.length === 0) {
+      if (!Array.isArray(data) || data.length === 0) {
         alert("Código da proposta ou senha inválidos.");
         return;
       }
 
       const usuario = data[0];
-
       if (
         !usuario.usuario_id ||
         !usuario.instituicao_id ||
         !usuario.proposta_id ||
         !usuario.codigo_proposta
       ) {
-        alert("Não foi possível identificar a instituição e a proposta.");
+        throw new Error(
+          "O login não retornou todos os dados necessários. Confira a função portal_login no Supabase."
+        );
+      }
+
+      if (usuario.senha_troca_obrigatoria === true) {
+        setSenhaAtual(senha);
+        setMostrarAlterarSenha(true);
+        alert(
+          "Por segurança, crie uma nova senha antes de continuar. O acesso aos documentos ficará bloqueado até a conclusão da troca."
+        );
         return;
       }
 
-      sessionStorage.setItem(
-        "portal_codigo_proposta",
-        String(usuario.codigo_proposta)
-      );
-      sessionStorage.setItem(
-        "portal_usuario_id",
-        String(usuario.usuario_id)
-      );
-      sessionStorage.setItem(
-        "portal_instituicao_id",
-        String(usuario.instituicao_id)
-      );
-      sessionStorage.setItem(
-        "portal_proposta_id",
-        String(usuario.proposta_id)
-      );
-      sessionStorage.setItem(
-        "portal_nome_usuario",
-        String(usuario.nome_usuario || "")
-      );
-      sessionStorage.setItem(
-        "portal_nome_instituicao",
-        String(usuario.nome_instituicao || "")
-      );
+      sessionStorage.setItem("portal_codigo_proposta", String(usuario.codigo_proposta));
+      sessionStorage.setItem("portal_usuario_id", String(usuario.usuario_id));
+      sessionStorage.setItem("portal_instituicao_id", String(usuario.instituicao_id));
+      sessionStorage.setItem("portal_proposta_id", String(usuario.proposta_id));
+      sessionStorage.setItem("portal_nome_usuario", String(usuario.nome_usuario || ""));
+      sessionStorage.setItem("portal_nome_instituicao", String(usuario.nome_instituicao || ""));
+      sessionStorage.setItem("portal_tipo_usuario", String(usuario.tipo_usuario || "instituicao"));
 
       navigate("/portal/documentos", { replace: true });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Erro no login do portal:", error);
-      alert(error?.message || "Não foi possível entrar no Portal.");
+      const mensagem =
+        error instanceof Error
+          ? error.message
+          : "Não foi possível entrar no Portal.";
+      alert(mensagem);
     } finally {
       setCarregando(false);
     }
   }
 
   async function alterarSenha() {
-    if (
-      !codigoProposta.trim() ||
-      !senhaAtual ||
-      !novaSenha ||
-      !confirmarSenha
-    ) {
+    if (!codigoProposta.trim() || !senhaAtual || !novaSenha || !confirmarSenha) {
       alert("Preencha o código da proposta e todos os campos de senha.");
       return;
     }
-
-    if (novaSenha.length < 6) {
-      alert("A nova senha deve ter pelo menos 6 caracteres.");
+    if (novaSenha.length < 8) {
+      alert("A nova senha deve ter pelo menos 8 caracteres.");
       return;
     }
-
+    if (novaSenha === senhaAtual) {
+      alert("A nova senha deve ser diferente da senha atual.");
+      return;
+    }
     if (novaSenha !== confirmarSenha) {
       alert("A confirmação da nova senha não confere.");
       return;
@@ -113,29 +118,38 @@ export default function PortalLogin() {
 
     try {
       setAlterandoSenha(true);
-
       const { data, error } = await supabase.rpc("portal_alterar_senha", {
         p_codigo_proposta: codigoProposta.trim(),
         p_senha_atual: senhaAtual,
         p_nova_senha: novaSenha,
       });
 
-      if (error) throw error;
-
+      if (error) {
+        console.error("Erro retornado pelo portal_alterar_senha:", error);
+        throw new Error(
+          "Não foi possível alterar a senha. Confira a função portal_alterar_senha no Supabase."
+        );
+      }
       if (data !== true) {
-        throw new Error("Não foi possível alterar a senha. Confira os dados.");
+        throw new Error(
+          "Não foi possível alterar a senha. Confira o código da proposta e a senha atual."
+        );
       }
 
-      alert("Senha alterada com sucesso!");
-
-      setSenha("");
+      limparSessaoPortal();
+      setSenha(novaSenha);
       setSenhaAtual("");
       setNovaSenha("");
       setConfirmarSenha("");
       setMostrarAlterarSenha(false);
-    } catch (error: any) {
+      alert("Senha alterada com sucesso! Entre novamente usando a nova senha.");
+    } catch (error: unknown) {
       console.error("Erro ao alterar senha:", error);
-      alert(error?.message || "Não foi possível alterar a senha.");
+      const mensagem =
+        error instanceof Error
+          ? error.message
+          : "Não foi possível alterar a senha.";
+      alert(mensagem);
     } finally {
       setAlterandoSenha(false);
     }
@@ -178,11 +192,9 @@ export default function PortalLogin() {
       >
         <div style={{ textAlign: "center", marginBottom: 30 }}>
           <div style={{ fontSize: 50, marginBottom: 10 }}>📁</div>
-
           <h1 style={{ margin: 0, color: "#1f3c88", fontSize: 28 }}>
             Portal da Instituição
           </h1>
-
           <p style={{ color: "#64748b", marginTop: 8 }}>
             Acesso exclusivo para documentos
           </p>
@@ -199,7 +211,6 @@ export default function PortalLogin() {
         >
           Código da proposta
         </label>
-
         <input
           type="text"
           value={codigoProposta}
@@ -221,7 +232,6 @@ export default function PortalLogin() {
         >
           Senha
         </label>
-
         <input
           type="password"
           value={senha}
@@ -230,14 +240,14 @@ export default function PortalLogin() {
           disabled={carregando || alterandoSenha}
           autoComplete="current-password"
           onKeyDown={(e) => {
-            if (e.key === "Enter") entrar();
+            if (e.key === "Enter") void entrar();
           }}
           style={estiloInput}
         />
 
         <button
           type="button"
-          onClick={entrar}
+          onClick={() => void entrar()}
           disabled={carregando || alterandoSenha}
           style={{
             width: "100%",
@@ -256,7 +266,13 @@ export default function PortalLogin() {
 
         <button
           type="button"
-          onClick={() => setMostrarAlterarSenha(!mostrarAlterarSenha)}
+          onClick={() => {
+            setMostrarAlterarSenha(!mostrarAlterarSenha);
+            setSenhaAtual("");
+            setNovaSenha("");
+            setConfirmarSenha("");
+          }}
+          disabled={carregando || alterandoSenha}
           style={{
             width: "100%",
             marginTop: 12,
@@ -283,13 +299,10 @@ export default function PortalLogin() {
               borderRadius: 8,
             }}
           >
-            <h3 style={{ color: "#1f3c88", marginTop: 0 }}>
-              Alterar senha
-            </h3>
-
+            <h3 style={{ color: "#1f3c88", marginTop: 0 }}>Alterar senha</h3>
             <p style={{ color: "#64748b", fontSize: 13 }}>
-              Informe o código da proposta acima, sua senha atual e a nova
-              senha.
+              Informe o código da proposta, a senha atual e escolha uma nova
+              senha com pelo menos 8 caracteres.
             </p>
 
             <label style={{ display: "block", marginBottom: 6 }}>
@@ -330,7 +343,7 @@ export default function PortalLogin() {
 
             <button
               type="button"
-              onClick={alterarSenha}
+              onClick={() => void alterarSenha()}
               disabled={alterandoSenha}
               style={{
                 width: "100%",
@@ -361,9 +374,9 @@ export default function PortalLogin() {
             lineHeight: 1.6,
           }}
         >
-          🔒 Área exclusiva da instituição.
+          🔒 Área exclusiva para documentos.
           <br />
-          Seus documentos ficam vinculados à sua proposta.
+          Os documentos ficam vinculados à proposta autorizada.
         </div>
       </div>
     </div>

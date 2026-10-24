@@ -1,0 +1,2715 @@
+import { useEffect, useRef, useState } from "react";
+import { supabase } from "../database/supabase";
+
+type TipoDocumento = "arquivo" | "link";
+
+type Documento = {
+  id: number;
+  dbId?: string;
+  nome: string;
+  tipo: TipoDocumento;
+  status: "Pendente" | "Concluído";
+  arquivo?: File;
+  link?: string;
+  caminhoArquivo?: string;
+  nomeArquivo?: string;
+  dataEnvio?: string;
+  enviadoPor?: string;
+  ultimaTroca?: string;
+  foiTrocado?: boolean;
+  oculto?: boolean;
+  recado?: string;
+  lembrete?: string;
+  dataVencimento?: string;
+};
+
+type Fornecedor = {
+  id: number;
+  nome: string;
+  documentos: Documento[];
+};
+
+type MesPagamento = {
+  id: number;
+  mes: number;
+  ano: number;
+  fornecedores: Fornecedor[];
+};
+
+const documentosIniciais: Documento[] = [
+  { id: 1, nome: "Papel timbrado", tipo: "arquivo", status: "Pendente" },
+  { id: 2, nome: "Ata de eleição e posse da diretoria vigente", tipo: "arquivo", status: "Pendente" },
+  { id: 3, nome: "Estatuto social atualizado e alterações", tipo: "arquivo", status: "Pendente" },
+  { id: 4, nome: "Comprovante de endereço do presidente", tipo: "arquivo", status: "Pendente" },
+  { id: 5, nome: "Comprovante de endereço da instituição", tipo: "arquivo", status: "Pendente" },
+  { id: 6, nome: "RG ou CNH e CPF do representante legal", tipo: "arquivo", status: "Pendente" },
+  { id: 7, nome: "Currículo do presidente ou representante legal", tipo: "arquivo", status: "Pendente" },
+  { id: 8, nome: "Currículo institucional ou portfólio e fotos", tipo: "arquivo", status: "Pendente" },
+  { id: 9, nome: "Cartão CNPJ atualizado", tipo: "arquivo", status: "Pendente" },
+  { id: 10, nome: "Relação atualizada dos dirigentes", tipo: "arquivo", status: "Pendente" },
+  { id: 11, nome: "Registro em conselhos, quando exigido", tipo: "arquivo", status: "Pendente" },
+  { id: 12, nome: "Procuração ou documento de representação, quando aplicável", tipo: "arquivo", status: "Pendente" },
+  { id: 13, nome: "Planilha orçamentária do projeto", tipo: "arquivo", status: "Pendente" },
+  { id: 14, nome: "Site da instituição", tipo: "link", status: "Pendente" },
+  { id: 15, nome: "Redes sociais da instituição", tipo: "link", status: "Pendente" },
+];
+
+const documentosPagamentoIniciais = (): Documento[] => [
+  {
+    id: Date.now() + 1,
+    nome: "Cotação 1",
+    tipo: "arquivo",
+    status: "Pendente",
+  },
+  {
+    id: Date.now() + 2,
+    nome: "Cotação 2",
+    tipo: "arquivo",
+    status: "Pendente",
+  },
+  {
+    id: Date.now() + 3,
+    nome: "Cotação 3",
+    tipo: "arquivo",
+    status: "Pendente",
+  },
+  {
+    id: Date.now() + 4,
+    nome: "Certidão Municipal",
+    tipo: "arquivo",
+    status: "Pendente",
+  },
+  {
+    id: Date.now() + 5,
+    nome: "Certidão Federal",
+    tipo: "arquivo",
+    status: "Pendente",
+  },
+  {
+    id: Date.now() + 6,
+    nome: "Certidão Trabalhista",
+    tipo: "arquivo",
+    status: "Pendente",
+  },
+  {
+    id: Date.now() + 7,
+    nome: "Certidão FGTS",
+    tipo: "arquivo",
+    status: "Pendente",
+  },
+  {
+    id: Date.now() + 8,
+    nome: "Certidão Estadual",
+    tipo: "arquivo",
+    status: "Pendente",
+  },
+  {
+    id: Date.now() + 9,
+    nome: "Cartão CNPJ",
+    tipo: "arquivo",
+    status: "Pendente",
+  },
+  {
+    id: Date.now() + 10,
+    nome: "Nota Fiscal",
+    tipo: "arquivo",
+    status: "Pendente",
+  },
+];
+
+const nomesMeses = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+];
+
+export default function PortalHome() {
+  const [codigoProposta] = useState(
+    sessionStorage.getItem("portal_codigo_proposta") || ""
+  );
+
+  const [nomeInstituicao] = useState(
+    sessionStorage.getItem("portal_nome_instituicao") || ""
+  );
+
+  const [nomeUsuario] = useState(
+    sessionStorage.getItem("portal_nome_usuario") || ""
+  );
+
+  // ==========================================
+  // MINHA CONTA
+  // ==========================================
+  const [mostrarMinhaConta, setMostrarMinhaConta] = useState(false);
+  const [senhaAtual, setSenhaAtual] = useState("");
+  const [novaSenha, setNovaSenha] = useState("");
+  const [confirmarNovaSenha, setConfirmarNovaSenha] = useState("");
+  const [alterandoSenha, setAlterandoSenha] = useState(false);
+
+  const emailConta =
+    sessionStorage.getItem("portal_email") || "Não informado";
+
+  async function alterarSenha() {
+    if (!senhaAtual || !novaSenha || !confirmarNovaSenha) {
+      alert("Preencha todos os campos de senha.");
+      return;
+    }
+
+    if (novaSenha.length < 6) {
+      alert("A nova senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+
+    if (novaSenha !== confirmarNovaSenha) {
+      alert("A confirmação da nova senha não confere.");
+      return;
+    }
+
+    try {
+      setAlterandoSenha(true);
+
+      const { data, error } = await supabase.rpc("portal_alterar_senha", {
+        p_codigo_proposta: codigoProposta,
+        p_senha_atual: senhaAtual,
+        p_nova_senha: novaSenha,
+      });
+
+      if (error) throw error;
+
+      if (data !== true) {
+        throw new Error("Não foi possível alterar a senha.");
+      }
+
+      alert("Senha alterada com sucesso!");
+      setSenhaAtual("");
+      setNovaSenha("");
+      setConfirmarNovaSenha("");
+      setMostrarMinhaConta(false);
+    } catch (error: any) {
+      console.error("Erro ao alterar senha:", error);
+      alert(error.message || "Não foi possível alterar a senha.");
+    } finally {
+      setAlterandoSenha(false);
+    }
+  }
+
+  // ==========================================
+  // DOCUMENTOS DA PROPOSTA
+  // ==========================================
+
+  const [documentos, setDocumentos] =
+    useState<Documento[]>(documentosIniciais);
+
+  const propostaId =
+    sessionStorage.getItem("portal_proposta_id") || "";
+
+  const usuarioId =
+    sessionStorage.getItem("portal_usuario_id") || "";
+
+  useEffect(() => {
+    async function carregarDocumentos() {
+      if (!propostaId) {
+        console.error("ID da proposta não encontrado na sessão.");
+        return;
+      }
+
+      try {
+          const { data, error } = await supabase.rpc(
+          "portal_listar_documentos",
+          {
+            p_proposta_id: propostaId,
+          }
+        );
+
+        if (error) {
+          console.error(
+            "Erro ao carregar documentos do Portal:",
+            error
+          );
+          return;
+        }
+
+        if (!data || data.length === 0) {
+          return;
+        }
+
+        setDocumentos((listaAtual) =>
+          listaAtual.map((documento) => {
+            const documentosDoMesmoNome = data
+              .filter(
+                (item: any) =>
+                  item.nome_documento === documento.nome
+              )
+              .sort(
+                (a: any, b: any) =>
+                  new Date(b.enviado_em).getTime() -
+                  new Date(a.enviado_em).getTime()
+              );
+
+            const ultimo = documentosDoMesmoNome[0];
+
+            if (!ultimo) {
+              return documento;
+            }
+
+            return {
+              ...documento,
+              dbId: ultimo.id,
+              status: ultimo.caminho_arquivo
+                ? "Concluído"
+                : "Pendente",
+              nomeArquivo:
+                ultimo.nome_arquivo || undefined,
+              caminhoArquivo:
+                ultimo.caminho_arquivo || undefined,
+              dataEnvio: ultimo.enviado_em
+                ? new Date(
+                    ultimo.enviado_em
+                  ).toLocaleString("pt-BR")
+                : undefined,
+              enviadoPor: nomeUsuario || "Usuário do Portal",
+            };
+          })
+        );
+      } catch (error) {
+        console.error(
+          "Erro inesperado ao carregar documentos:",
+          error
+        );
+      }
+    }
+
+    carregarDocumentos();
+  }, [propostaId]);
+
+  const [pesquisa, setPesquisa] = useState("");
+
+  const [novoDocumento, setNovoDocumento] = useState("");
+
+  const [mostrarAdicionar, setMostrarAdicionar] = useState(false);
+
+  // ==========================================
+  // FASE DE PAGAMENTOS - POR MÊS E ANO
+  // ==========================================
+
+  const [mesesPagamento, setMesesPagamento] =
+    useState<MesPagamento[]>([]);
+
+  const [mesAberto, setMesAberto] = useState<number | null>(null);
+
+  const [pesquisaPagamento, setPesquisaPagamento] =
+    useState("");
+
+  const [mostrarNovoMes, setMostrarNovoMes] =
+    useState(false);
+
+  const [novoMes, setNovoMes] = useState(
+    new Date().getMonth() + 1
+  );
+
+  const [novoAno, setNovoAno] = useState(
+    new Date().getFullYear()
+  );
+
+  const [novoDocumentoPagamento, setNovoDocumentoPagamento] =
+    useState("");
+
+  const [mostrarAdicionarPagamento, setMostrarAdicionarPagamento] =
+    useState(false);
+
+  const [novoFornecedor, setNovoFornecedor] = useState("");
+
+  const [fornecedorAberto, setFornecedorAberto] =
+    useState<number | null>(null);
+
+
+  // ==========================================
+  // CARREGAR DOCUMENTOS DA FASE DE PAGAMENTOS
+  // ==========================================
+
+  useEffect(() => {
+    async function carregarDocumentosPagamento() {
+      if (!propostaId) return;
+
+      try {
+        const { data, error } = await supabase.rpc(
+          "portal_listar_documentos",
+          {
+            p_proposta_id: propostaId,
+          }
+        );
+
+        if (error) {
+          console.error(
+            "Erro ao carregar documentos de pagamento:",
+            error
+          );
+          return;
+        }
+
+        if (!data || data.length === 0) return;
+
+        // Organiza primeiro por MÊS/ANO e, dentro dele,
+        // por quantidade ilimitada de fornecedores.
+        const grupos = new Map<
+          string,
+          {
+            mes: number;
+            ano: number;
+            fornecedores: Map<string, any[]>;
+          }
+        >();
+
+        for (const item of data) {
+          if (!item.descricao) continue;
+
+          try {
+            const meta = JSON.parse(item.descricao);
+
+            if (
+              meta?.tipo !== "pagamento" ||
+              !meta.mes ||
+              !meta.ano ||
+              !meta.fornecedor ||
+              !meta.documento
+            ) {
+              continue;
+            }
+
+            const chaveMes = `${meta.ano}-${meta.mes}`;
+
+            let grupoMes = grupos.get(chaveMes);
+
+            if (!grupoMes) {
+              grupoMes = {
+                mes: Number(meta.mes),
+                ano: Number(meta.ano),
+                fornecedores: new Map(),
+              };
+
+              grupos.set(chaveMes, grupoMes);
+            }
+
+            const nomeFornecedor = String(meta.fornecedor);
+
+            const listaFornecedor =
+              grupoMes.fornecedores.get(nomeFornecedor) || [];
+
+            listaFornecedor.push(item);
+            grupoMes.fornecedores.set(
+              nomeFornecedor,
+              listaFornecedor
+            );
+          } catch {
+            // Ignora descrições antigas que não sejam JSON de pagamento.
+          }
+        }
+
+        const mesesReconstruidos: MesPagamento[] = [];
+        let contadorId = Date.now();
+
+        for (const grupoMes of grupos.values()) {
+          const fornecedoresReconstruidos: Fornecedor[] = [];
+
+          for (const [
+            nomeFornecedor,
+            registrosFornecedor,
+          ] of grupoMes.fornecedores.entries()) {
+            const documentosMap = new Map<string, any>();
+
+            for (const item of registrosFornecedor) {
+              try {
+                const meta = JSON.parse(item.descricao);
+                const chaveDocumento = String(meta.documento);
+                const anterior =
+                  documentosMap.get(chaveDocumento);
+
+                if (
+                  !anterior ||
+                  new Date(item.enviado_em || 0).getTime() >
+                    new Date(
+                      anterior.enviado_em || 0
+                    ).getTime()
+                ) {
+                  documentosMap.set(
+                    chaveDocumento,
+                    item
+                  );
+                }
+              } catch {
+                // Ignora registros inválidos.
+              }
+            }
+
+            const fornecedorId = ++contadorId;
+
+            const documentosBase =
+              documentosPagamentoIniciais();
+
+            const documentosCarregados = Array.from(
+              documentosMap.values()
+            ).map((item: any) => {
+              const meta = JSON.parse(item.descricao);
+
+              return {
+                id: ++contadorId,
+                dbId: item.id,
+                nome: String(meta.documento),
+                tipo: "arquivo" as const,
+                status: item.caminho_arquivo
+                  ? ("Concluído" as const)
+                  : ("Pendente" as const),
+                nomeArquivo:
+                  item.nome_arquivo || undefined,
+                caminhoArquivo:
+                  item.caminho_arquivo || undefined,
+                dataEnvio: item.enviado_em
+                  ? new Date(
+                      item.enviado_em
+                    ).toLocaleString("pt-BR")
+                  : undefined,
+                enviadoPor:
+                  nomeUsuario ||
+                  "Usuário do Portal",
+              };
+            });
+
+            const documentosReconstruidos =
+              documentosBase.map((base) => {
+                const salvo =
+                  documentosCarregados.find(
+                    (item) => item.nome === base.nome
+                  );
+
+                return salvo
+                  ? {
+                      ...base,
+                      ...salvo,
+                      id: salvo.id,
+                    }
+                  : base;
+              });
+
+            for (const salvo of documentosCarregados) {
+              if (
+                !documentosReconstruidos.some(
+                  (item) =>
+                    item.nome === salvo.nome
+                )
+              ) {
+                documentosReconstruidos.push(salvo);
+              }
+            }
+
+            fornecedoresReconstruidos.push({
+              id: fornecedorId,
+              nome: nomeFornecedor,
+              documentos: documentosReconstruidos,
+            });
+          }
+
+          fornecedoresReconstruidos.sort((a, b) =>
+            a.nome.localeCompare(
+              b.nome,
+              "pt-BR"
+            )
+          );
+
+          mesesReconstruidos.push({
+            id: ++contadorId,
+            mes: grupoMes.mes,
+            ano: grupoMes.ano,
+            fornecedores: fornecedoresReconstruidos,
+          });
+        }
+
+        mesesReconstruidos.sort((a, b) => {
+          if (a.ano !== b.ano) {
+            return b.ano - a.ano;
+          }
+
+          return b.mes - a.mes;
+        });
+
+        setMesesPagamento(
+          mesesReconstruidos
+        );
+      } catch (error) {
+        console.error(
+          "Erro inesperado ao carregar documentos de pagamento:",
+          error
+        );
+      }
+    }
+
+    carregarDocumentosPagamento();
+  }, [propostaId]);
+
+  // ==========================================
+  // CONTROLE DE UPLOAD
+  // ==========================================
+
+  const [documentoSelecionado, setDocumentoSelecionado] =
+    useState<number | null>(null);
+
+  const [mesSelecionado, setMesSelecionado] =
+    useState<number | null>(null);
+
+  const [fornecedorSelecionado, setFornecedorSelecionado] =
+    useState<number | null>(null);
+
+  const [tipoUpload, setTipoUpload] = useState<
+    "proposta" | "pagamento"
+  >("proposta");
+
+  const inputArquivo =
+    useRef<HTMLInputElement | null>(null);
+
+  // ==========================================
+  // ABRIR ARQUIVO SALVO NO STORAGE
+  // ==========================================
+
+  async function abrirDocumentoSalvo(caminho?: string) {
+    if (!caminho) {
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.storage
+        .from("portal-documentos")
+        .createSignedUrl(caminho, 60 * 60);
+
+      if (error) {
+        console.error("Erro ao gerar link do arquivo:", error);
+        alert(
+          error.message ||
+            "Não foi possível abrir o arquivo salvo."
+        );
+        return;
+      }
+
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (error: any) {
+      console.error("Erro inesperado ao abrir arquivo:", error);
+      alert(
+        error?.message ||
+          "Não foi possível abrir o arquivo salvo."
+      );
+    }
+  }
+
+  // ==========================================
+  // LINK
+  // ==========================================
+
+  const [linkAberto, setLinkAberto] =
+    useState<number | null>(null);
+
+  const [valorLink, setValorLink] = useState("");
+
+  // ==========================================
+  // ABRIR UPLOAD
+  // ==========================================
+
+  function abrirArquivo(
+  id: number,
+  tipo: "proposta" | "pagamento",
+  idMes?: number,
+  idFornecedor?: number
+) {
+  setDocumentoSelecionado(id);
+  setTipoUpload(tipo);
+
+  if (tipo === "pagamento") {
+    setMesSelecionado(idMes ?? null);
+    setFornecedorSelecionado(idFornecedor ?? null);
+  } else {
+    setMesSelecionado(null);
+    setFornecedorSelecionado(null);
+  }
+
+    setTimeout(() => {
+      inputArquivo.current?.click();
+    }, 50);
+  }
+
+  // ==========================================
+  // SELECIONAR ARQUIVO
+  // ==========================================
+
+  async function selecionarArquivo(
+    evento: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const arquivo = evento.target.files?.[0];
+
+    if (!arquivo || documentoSelecionado === null) {
+      return;
+    }
+
+    // DOCUMENTO DA PROPOSTA: salvar no Storage e no banco.
+    if (tipoUpload === "proposta") {
+      if (!propostaId) {
+        alert("Não foi possível identificar a proposta.");
+        evento.target.value = "";
+        return;
+      }
+
+      if (!usuarioId) {
+        alert("Não foi possível identificar o usuário.");
+        evento.target.value = "";
+        return;
+      }
+
+      const documentoAtual = documentos.find(
+        (documento) => documento.id === documentoSelecionado
+      );
+
+      if (!documentoAtual) {
+        alert("Documento não encontrado.");
+        evento.target.value = "";
+        return;
+      }
+
+      try {
+        const nomeSeguro = arquivo.name
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-zA-Z0-9._-]/g, "_");
+
+        const caminhoArquivo =
+          `${propostaId}/${crypto.randomUUID()}-${nomeSeguro}`;
+
+        const { error: erroUpload } = await supabase.storage
+          .from("portal-documentos")
+          .upload(caminhoArquivo, arquivo, {
+            cacheControl: "3600",
+            upsert: false,
+            contentType: arquivo.type || undefined,
+          });
+
+        if (erroUpload) {
+          console.error(
+            "Erro ao enviar arquivo para o Storage:",
+            erroUpload
+          );
+
+          alert(
+            erroUpload.message ||
+              "Não foi possível enviar o arquivo."
+          );
+
+          return;
+        }
+
+        const { data: documentoSalvo, error: erroBanco } =
+          await supabase.rpc("portal_adicionar_documento", {
+            p_proposta_id: propostaId,
+            p_nome_documento: documentoAtual.nome,
+            p_descricao: null,
+            p_obrigatorio: true,
+            p_nome_arquivo: arquivo.name,
+            p_caminho_arquivo: caminhoArquivo,
+            p_tamanho_arquivo: arquivo.size,
+            p_tipo_arquivo:
+              arquivo.type || "application/octet-stream",
+            p_enviado_por: usuarioId,
+          });
+
+        if (erroBanco) {
+          console.error(
+            "Erro ao registrar documento no banco:",
+            erroBanco
+          );
+
+          await supabase.storage
+            .from("portal-documentos")
+            .remove([caminhoArquivo]);
+
+          alert(
+            erroBanco.message ||
+              "O arquivo foi enviado, mas não foi possível registrar o documento."
+          );
+
+          return;
+        }
+
+        const agora = new Date().toLocaleString("pt-BR");
+
+        setDocumentos((lista) =>
+          lista.map((documento) =>
+            documento.id === documentoSelecionado
+              ? {
+                  ...documento,
+                  dbId:
+                    typeof documentoSalvo === "string"
+                      ? documentoSalvo
+                      : documento.dbId,
+                  arquivo,
+                  status: "Concluído",
+                  nomeArquivo: arquivo.name,
+                  caminhoArquivo,
+                  dataEnvio: agora,
+                  enviadoPor: nomeUsuario || "Usuário do Portal",
+                  ultimaTroca:
+                    documento.arquivo || documento.nomeArquivo
+                      ? agora
+                      : documento.ultimaTroca,
+                  foiTrocado:
+                    documento.arquivo || documento.nomeArquivo
+                      ? true
+                      : documento.foiTrocado,
+                }
+              : documento
+          )
+        );
+
+        alert("Documento enviado com sucesso!");
+      } catch (error: any) {
+        console.error(
+          "Erro inesperado ao enviar documento:",
+          error
+        );
+
+        alert(
+          error?.message ||
+            "Não foi possível enviar o documento."
+        );
+      } finally {
+        setDocumentoSelecionado(null);
+        setMesSelecionado(null);
+        setFornecedorSelecionado(null);
+        evento.target.value = "";
+      }
+
+      return;
+    }
+
+    // DOCUMENTO DA FASE DE PAGAMENTOS: salvar no Storage e no banco.
+    if (
+      tipoUpload === "pagamento" &&
+      mesSelecionado !== null &&
+      fornecedorSelecionado !== null
+    ) {
+      if (!propostaId) {
+        alert("Não foi possível identificar a proposta.");
+        evento.target.value = "";
+        return;
+      }
+
+      if (!usuarioId) {
+        alert("Não foi possível identificar o usuário.");
+        evento.target.value = "";
+        return;
+      }
+
+      const mesAtual = mesesPagamento.find(
+        (mes) => mes.id === mesSelecionado
+      );
+
+      const fornecedorAtual = mesAtual?.fornecedores.find(
+        (fornecedor) => fornecedor.id === fornecedorSelecionado
+      );
+
+      const documentoAtual = fornecedorAtual?.documentos.find(
+        (documento) => documento.id === documentoSelecionado
+      );
+
+      if (!mesAtual || !fornecedorAtual || !documentoAtual) {
+        alert("Documento de pagamento não encontrado.");
+        evento.target.value = "";
+        return;
+      }
+
+      try {
+        const nomeSeguro = arquivo.name
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-zA-Z0-9._-]/g, "_");
+
+        const caminhoArquivo =
+          `${propostaId}/pagamentos/${mesAtual.ano}/${mesAtual.mes}/${crypto.randomUUID()}-${nomeSeguro}`;
+
+        const { error: erroUpload } = await supabase.storage
+          .from("portal-documentos")
+          .upload(caminhoArquivo, arquivo, {
+            cacheControl: "3600",
+            upsert: false,
+            contentType: arquivo.type || undefined,
+          });
+
+        if (erroUpload) {
+          console.error(
+            "Erro ao enviar documento de pagamento para o Storage:",
+            erroUpload
+          );
+
+          alert(
+            erroUpload.message ||
+              "Não foi possível enviar o documento de pagamento."
+          );
+
+          return;
+        }
+
+        const descricaoPagamento = JSON.stringify({
+          tipo: "pagamento",
+          mes: mesAtual.mes,
+          ano: mesAtual.ano,
+          fornecedor: fornecedorAtual.nome,
+          documento: documentoAtual.nome,
+        });
+
+        const { data: documentoSalvo, error: erroBanco } =
+          await supabase.rpc("portal_adicionar_documento", {
+            p_proposta_id: propostaId,
+            p_nome_documento: documentoAtual.nome,
+            p_descricao: descricaoPagamento,
+            p_obrigatorio: true,
+            p_nome_arquivo: arquivo.name,
+            p_caminho_arquivo: caminhoArquivo,
+            p_tamanho_arquivo: arquivo.size,
+            p_tipo_arquivo:
+              arquivo.type || "application/octet-stream",
+            p_enviado_por: usuarioId,
+          });
+
+        if (erroBanco) {
+          console.error(
+            "Erro ao registrar documento de pagamento no banco:",
+            erroBanco
+          );
+
+          await supabase.storage
+            .from("portal-documentos")
+            .remove([caminhoArquivo]);
+
+          alert(
+            erroBanco.message ||
+              "O arquivo foi enviado, mas não foi possível registrar o documento de pagamento."
+          );
+
+          return;
+        }
+
+        const agora = new Date().toLocaleString("pt-BR");
+
+        setMesesPagamento((lista) =>
+          lista.map((mes) =>
+            mes.id === mesSelecionado
+              ? {
+                  ...mes,
+                  fornecedores: mes.fornecedores.map((fornecedor) =>
+                    fornecedor.id === fornecedorSelecionado
+                      ? {
+                          ...fornecedor,
+                          documentos: fornecedor.documentos.map(
+                            (documento) => {
+                              if (
+                                documento.id !== documentoSelecionado
+                              ) {
+                                return documento;
+                              }
+
+                              const primeiraVersao =
+                                !documento.arquivo &&
+                                !documento.nomeArquivo;
+
+                              return {
+                                ...documento,
+                                dbId:
+                                  typeof documentoSalvo === "string"
+                                    ? documentoSalvo
+                                    : documento.dbId,
+                                arquivo,
+                                status: "Concluído",
+                                nomeArquivo: arquivo.name,
+                                caminhoArquivo,
+                                dataEnvio: primeiraVersao
+                                  ? agora
+                                  : documento.dataEnvio || agora,
+                                enviadoPor:
+                                  nomeUsuario || "Usuário do Portal",
+                                ultimaTroca: primeiraVersao
+                                  ? documento.ultimaTroca
+                                  : agora,
+                                foiTrocado: primeiraVersao
+                                  ? documento.foiTrocado
+                                  : true,
+                              };
+                            }
+                          ),
+                        }
+                      : fornecedor
+                  ),
+                }
+              : mes
+          )
+        );
+
+        alert("Documento de pagamento enviado com sucesso!");
+      } catch (error: any) {
+        console.error(
+          "Erro inesperado ao enviar documento de pagamento:",
+          error
+        );
+
+        alert(
+          error?.message ||
+            "Não foi possível enviar o documento de pagamento."
+        );
+      }
+    }
+
+    setDocumentoSelecionado(null);
+    setMesSelecionado(null);
+    setFornecedorSelecionado(null);
+    evento.target.value = "";
+  }
+
+  // ==========================================
+  // LINK
+  // ==========================================
+
+  function abrirLink(
+  id: number,
+  linkAtual?: string
+) {
+  setLinkAberto(id);
+  setValorLink(linkAtual || "");
+}
+
+  function salvarLink() {
+    if (linkAberto === null) {
+      return;
+    }
+
+    if (!valorLink.trim()) {
+      alert("Digite o endereço do site ou link.");
+      return;
+    }
+
+    setDocumentos((lista) =>
+      lista.map((documento) =>
+        documento.id === linkAberto
+          ? {
+              ...documento,
+              link: valorLink.trim(),
+              status: "Concluído",
+            }
+          : documento
+      )
+    );
+
+    setLinkAberto(null);
+    setValorLink("");
+  }
+
+  // ==========================================
+  // ADICIONAR DOCUMENTO DA PROPOSTA
+  // ==========================================
+
+  function adicionarDocumento() {
+    const nome = novoDocumento.trim();
+
+    if (!nome) {
+      alert("Digite o nome do documento.");
+      return;
+    }
+
+    const novo: Documento = {
+      id: Date.now(),
+      nome,
+      tipo: "arquivo",
+      status: "Pendente",
+    };
+
+    setDocumentos((lista) => [
+      ...lista,
+      novo,
+    ]);
+
+    setNovoDocumento("");
+    setMostrarAdicionar(false);
+  }
+  // ==========================================
+  // CRIAR NOVO MÊS
+  // ==========================================
+
+  function criarMesPagamento() {
+    const jaExiste = mesesPagamento.some(
+      (mes) =>
+        mes.mes === novoMes &&
+        mes.ano === novoAno
+    );
+
+    if (jaExiste) {
+      alert(
+        "Este mês já foi criado. Abra o mês existente para adicionar fornecedores."
+      );
+      return;
+    }
+
+    const novoFornecedor: Fornecedor = {
+      id: Date.now() + 1,
+      nome: "Fornecedor 1",
+      documentos: documentosPagamentoIniciais(),
+    };
+
+    const novo: MesPagamento = {
+      id: Date.now(),
+      mes: novoMes,
+      ano: novoAno,
+      fornecedores: [novoFornecedor],
+    };
+
+    setMesesPagamento((lista) =>
+      [...lista, novo].sort((a, b) => {
+        if (a.ano !== b.ano) return b.ano - a.ano;
+        return b.mes - a.mes;
+      })
+    );
+
+    setMesAberto(novo.id);
+    setFornecedorAberto(novoFornecedor.id);
+    setMostrarNovoMes(false);
+    setPesquisaPagamento("");
+    setMostrarAdicionarPagamento(false);
+  }
+
+  // ==========================================
+  // ABRIR / FECHAR MÊS
+  // ==========================================
+
+  function alternarMes(id: number) {
+    if (mesAberto === id) {
+      setMesAberto(null);
+      setFornecedorAberto(null);
+      return;
+    }
+
+    setMesAberto(id);
+    setPesquisaPagamento("");
+    setMostrarAdicionarPagamento(false);
+  }
+
+  // ==========================================
+  // ADICIONAR FORNECEDOR
+  // ==========================================
+
+  function adicionarFornecedorPagamento() {
+    if (mesAberto === null) return;
+
+    const nome = novoFornecedor.trim();
+
+    if (!nome) {
+      alert("Digite o nome do fornecedor.");
+      return;
+    }
+
+    const novo: Fornecedor = {
+      id: Date.now(),
+      nome,
+      documentos: documentosPagamentoIniciais(),
+    };
+
+    setMesesPagamento((lista) =>
+      lista.map((mes) =>
+        mes.id === mesAberto
+          ? { ...mes, fornecedores: [...mes.fornecedores, novo] }
+          : mes
+      )
+    );
+
+    setNovoFornecedor("");
+    setFornecedorAberto(novo.id);
+    setMostrarAdicionarPagamento(false);
+  }
+
+  function renomearFornecedor(mesId: number, fornecedorId: number) {
+    const mes = mesesPagamento.find((item) => item.id === mesId);
+    const fornecedor = mes?.fornecedores.find((item) => item.id === fornecedorId);
+    if (!fornecedor) return;
+
+    const nome = window.prompt("Nome do fornecedor:", fornecedor.nome);
+    if (!nome?.trim()) return;
+
+    setMesesPagamento((lista) =>
+      lista.map((item) =>
+        item.id === mesId
+          ? {
+              ...item,
+              fornecedores: item.fornecedores.map((f) =>
+                f.id === fornecedorId ? { ...f, nome: nome.trim() } : f
+              ),
+            }
+          : item
+      )
+    );
+  }
+
+  function alternarFornecedor(id: number) {
+    setFornecedorAberto((atual) => (atual === id ? null : id));
+  }
+
+  // ==========================================
+  // ADICIONAR DOCUMENTO DENTRO DO FORNECEDOR
+  // ==========================================
+
+  function adicionarDocumentoPagamento() {
+    if (mesAberto === null || fornecedorAberto === null) return;
+
+    const nome = novoDocumentoPagamento.trim();
+
+    if (!nome) {
+      alert("Digite o nome do documento.");
+      return;
+    }
+
+    const novo: Documento = {
+      id: Date.now(),
+      nome,
+      tipo: "arquivo",
+      status: "Pendente",
+    };
+
+    setMesesPagamento((lista) =>
+      lista.map((mes) =>
+        mes.id === mesAberto
+          ? {
+              ...mes,
+              fornecedores: mes.fornecedores.map((fornecedor) =>
+                fornecedor.id === fornecedorAberto
+                  ? { ...fornecedor, documentos: [...fornecedor.documentos, novo] }
+                  : fornecedor
+              ),
+            }
+          : mes
+      )
+    );
+
+    setNovoDocumentoPagamento("");
+    setMostrarAdicionarPagamento(false);
+  }
+
+  function ocultarDocumento(mesId: number, fornecedorId: number, documentoId: number) {
+    setMesesPagamento((lista) =>
+      lista.map((mes) =>
+        mes.id === mesId
+          ? {
+              ...mes,
+              fornecedores: mes.fornecedores.map((fornecedor) =>
+                fornecedor.id === fornecedorId
+                  ? {
+                      ...fornecedor,
+                      documentos: fornecedor.documentos.map((documento) =>
+                        documento.id === documentoId
+                          ? { ...documento, oculto: !documento.oculto }
+                          : documento
+                      ),
+                    }
+                  : fornecedor
+              ),
+            }
+          : mes
+      )
+    );
+  }
+
+  // ==========================================
+  // REMOVER MÊS
+  // ==========================================
+
+  function removerMes(id: number) {
+    const mes = mesesPagamento.find((item) => item.id === id);
+    if (!mes) return;
+
+    const confirmar = window.confirm(
+      `Deseja remover ${nomesMeses[mes.mes - 1]}/${mes.ano}?`
+    );
+    if (!confirmar) return;
+
+    setMesesPagamento((lista) => lista.filter((item) => item.id !== id));
+    if (mesAberto === id) {
+      setMesAberto(null);
+      setFornecedorAberto(null);
+    }
+  }
+
+  // ==========================================
+  // RESUMO DOS DOCUMENTOS DE PAGAMENTO
+  // ==========================================
+
+  function documentosVisiveis(mes: MesPagamento) {
+    return mes.fornecedores.flatMap((fornecedor) =>
+      fornecedor.documentos.filter((documento) => !documento.oculto)
+    );
+  }
+
+  function quantidadeConcluida(mes: MesPagamento) {
+    return documentosVisiveis(mes).filter(
+      (documento) => documento.status === "Concluído"
+    ).length;
+  }
+
+  function quantidadePendente(mes: MesPagamento) {
+    return documentosVisiveis(mes).filter(
+      (documento) => documento.status !== "Concluído"
+    ).length;
+  }
+
+  // ==========================================
+  // NOVO PAINEL DE DOCUMENTOS
+  // ==========================================
+
+  const [filtroDocumentos, setFiltroDocumentos] = useState<
+    "todos" | "pendentes" | "baixados"
+  >("todos");
+
+  const [categoriasAbertas, setCategoriasAbertas] = useState<
+    string[]
+  >([]);
+
+  const [documentosBaixados, setDocumentosBaixados] = useState<
+    number[]
+  >(() => {
+    try {
+      const salvo = sessionStorage.getItem(
+        "portal_documentos_baixados"
+      );
+      return salvo ? JSON.parse(salvo) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Cada categoria reúne os documentos individuais pelo nome, sem criar,
+  // apagar ou alterar registros já salvos no banco.
+  const categoriasDocumentos = [
+    {
+      nome: "Certidões",
+      icone: "📄",
+      cor: "#eaf3ff",
+      documentos: documentos.filter((documento) =>
+        /certid[aã]o|fgts|cau[cç]|cepim|regularidade fiscal|registro em conselhos/i.test(documento.nome)
+      ),
+    },
+    {
+      nome: "Declarações",
+      icone: "📑",
+      cor: "#fff8df",
+      documentos: documentos.filter((documento) =>
+        /declara[cç][aã]o/i.test(documento.nome)
+      ),
+    },
+    {
+      nome: "Fotos",
+      icone: "📷",
+      cor: "#fff0f2",
+      documentos: documentos.filter((documento) =>
+        /foto|portf[oó]lio/i.test(documento.nome)
+      ),
+    },
+    {
+      nome: "Documentos bancários",
+      icone: "🏦",
+      cor: "#eefbf4",
+      documentos: documentos.filter((documento) =>
+        /banco|ag[eê]ncia|dados banc[aá]rios/i.test(documento.nome)
+      ),
+    },
+    {
+      nome: "Site da instituição",
+      icone: "🔗",
+      cor: "#f3efff",
+      documentos: documentos.filter((documento) =>
+        /site da institui[cç][aã]o|redes sociais/i.test(documento.nome)
+      ),
+    },
+    {
+      nome: "Outros documentos",
+      icone: "📁",
+      cor: "#f4f6f8",
+      documentos: documentos.filter((documento) =>
+        !/certid[aã]o|fgts|cau[cç]|cepim|regularidade fiscal|registro em conselhos|declara[cç][aã]o|foto|portf[oó]lio|banco|ag[eê]ncia|dados banc[aá]rios|site da institui[cç][aã]o|redes sociais/i.test(documento.nome)
+      ),
+    },
+  ];
+
+  const documentosDisponiveis = documentos.filter(
+    (documento) => documento.status === "Concluído"
+  );
+
+  const totalDocumentos = documentos.length;
+  const totalBaixados = documentosBaixados.filter((id) =>
+    documentosDisponiveis.some((documento) => documento.id === id)
+  ).length;
+  const pendentes = documentos.filter(
+    (documento) => documento.status !== "Concluído"
+  ).length;
+
+  function alternarCategoria(nome: string) {
+    setCategoriasAbertas((atual) =>
+      atual.includes(nome)
+        ? atual.filter((item) => item !== nome)
+        : [...atual, nome]
+    );
+  }
+
+  function marcarDocumentoComoBaixado(id: number) {
+    setDocumentosBaixados((atual) => {
+      if (atual.includes(id)) return atual;
+      const novaLista = [...atual, id];
+      try {
+        sessionStorage.setItem(
+          "portal_documentos_baixados",
+          JSON.stringify(novaLista)
+        );
+      } catch {
+        // Mantém o funcionamento mesmo se o armazenamento do navegador falhar.
+      }
+      return novaLista;
+    });
+  }
+
+  async function baixarDocumento(documento: Documento) {
+    if (!documento.caminhoArquivo) {
+      alert("Este documento ainda não possui um arquivo para baixar.");
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.storage
+        .from("portal-documentos")
+        .createSignedUrl(documento.caminhoArquivo, 60 * 60);
+
+      if (error || !data?.signedUrl) {
+        throw error || new Error("Não foi possível gerar o link de download.");
+      }
+
+      const link = document.createElement("a");
+      link.href = data.signedUrl;
+      link.download = documento.nomeArquivo || documento.nome;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      marcarDocumentoComoBaixado(documento.id);
+    } catch (error: any) {
+      console.error("Erro ao baixar documento:", error);
+      alert(
+        error?.message ||
+          "Não foi possível baixar o documento."
+      );
+    }
+  }
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#f4f7fb",
+        padding: "24px 20px 50px",
+        boxSizing: "border-box",
+      }}
+    >
+      <div style={{ maxWidth: 1280, margin: "0 auto" }}>
+        {/* CABEÇALHO */}
+        <div
+          style={{
+            background: "#fff",
+            border: "1px solid #e6ebf2",
+            borderRadius: 18,
+            padding: "22px 26px",
+            marginBottom: 18,
+            boxShadow: "0 4px 18px rgba(15,23,42,.05)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 18,
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <div style={{ color: "#64748b", fontSize: 13, fontWeight: 700, marginBottom: 5 }}>
+                PORTAL DA INSTITUIÇÃO
+              </div>
+              <h1 style={{ margin: 0, color: "#173b72", fontSize: 29, lineHeight: 1.2 }}>
+                📁 Documentos da Instituição
+              </h1>
+              <p style={{ margin: "7px 0 0", color: "#64748b", fontSize: 14 }}>
+                Visualize, baixe e acompanhe os documentos da proposta.
+              </p>
+              {nomeInstituicao && (
+                <div style={{ marginTop: 9, color: "#334155", fontWeight: 700 }}>
+                  {nomeInstituicao}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: 9, alignItems: "center", flexWrap: "wrap" }}>
+              <div
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  background: "#eef4ff",
+                  color: "#244a92",
+                  fontWeight: 700,
+                  fontSize: 13,
+                }}
+              >
+                Proposta: {codigoProposta || "—"}
+              </div>
+              <button
+                type="button"
+                onClick={() => setMostrarMinhaConta(true)}
+                style={{
+                  border: "1px solid #d6dee9",
+                  borderRadius: 10,
+                  padding: "10px 14px",
+                  background: "#fff",
+                  color: "#334155",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                👤 Minha conta
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* PESQUISA + FILTROS */}
+        <div
+          style={{
+            background: "#fff",
+            border: "1px solid #e6ebf2",
+            borderRadius: 16,
+            padding: 16,
+            marginBottom: 18,
+            boxShadow: "0 3px 14px rgba(15,23,42,.04)",
+          }}
+        >
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <input
+              type="text"
+              value={pesquisa}
+              onChange={(e) => setPesquisa(e.target.value)}
+              placeholder="🔎 Pesquisar documentos..."
+              style={{
+                flex: 1,
+                minWidth: 250,
+                padding: "12px 14px",
+                border: "1px solid #d5dde8",
+                borderRadius: 10,
+                boxSizing: "border-box",
+                fontSize: 14,
+                outline: "none",
+              }}
+            />
+
+            {[
+              {
+                chave: "todos" as const,
+                titulo: "Todos",
+                valor: totalDocumentos,
+                fundo: "#eef5ff",
+                cor: "#2563eb",
+                icone: "📄",
+              },
+              {
+                chave: "pendentes" as const,
+                titulo: "Pendentes",
+                valor: pendentes,
+                fundo: "#fff8e8",
+                cor: "#b77900",
+                icone: "🟠",
+              },
+              {
+                chave: "baixados" as const,
+                titulo: "Baixados",
+                valor: totalBaixados,
+                fundo: "#edf9f1",
+                cor: "#17834c",
+                icone: "🟢",
+              },
+            ].map((filtro) => (
+              <button
+                key={filtro.chave}
+                type="button"
+                onClick={() => setFiltroDocumentos(filtro.chave)}
+                style={{
+                  minWidth: 125,
+                  border:
+                    filtroDocumentos === filtro.chave
+                      ? `2px solid ${filtro.cor}`
+                      : "1px solid #dbe3ef",
+                  borderRadius: 10,
+                  padding: "9px 13px",
+                  background: filtro.fundo,
+                  cursor: "pointer",
+                  textAlign: "left",
+                  color: "#334155",
+                }}
+              >
+                <span style={{ display: "block", fontSize: 11, color: "#64748b", fontWeight: 700 }}>
+                  {filtro.icone} {filtro.titulo}
+                </span>
+                <strong style={{ display: "block", marginTop: 2, fontSize: 19 }}>
+                  {filtro.valor}
+                </strong>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* DOCUMENTOS DA PROPOSTA */}
+        <div
+          style={{
+            background: "#fff",
+            border: "1px solid #e6ebf2",
+            borderRadius: 18,
+            padding: 22,
+            marginBottom: 25,
+            boxShadow: "0 4px 18px rgba(15,23,42,.05)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
+              marginBottom: 17,
+            }}
+          >
+            <div>
+              <h2 style={{ margin: 0, color: "#1e293b", fontSize: 22 }}>
+                Documentos da proposta
+              </h2>
+              <p style={{ margin: "5px 0 0", color: "#64748b", fontSize: 13 }}>
+                Cada documento é individual. Clique no cartão para abrir os detalhes.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setMostrarAdicionar(true)}
+              style={{
+                border: "none",
+                borderRadius: 9,
+                padding: "10px 14px",
+                background: "#2563eb",
+                color: "#fff",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              ＋ Adicionar documento
+            </button>
+          </div>
+
+          {mostrarAdicionar && (
+            <div
+              style={{
+                background: "#f8fafc",
+                border: "1px solid #dbe3ef",
+                borderRadius: 11,
+                padding: 16,
+                marginBottom: 18,
+              }}
+            >
+              <strong style={{ display: "block", marginBottom: 9, color: "#334155" }}>
+                Adicionar novo documento
+              </strong>
+              <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
+                <input
+                  type="text"
+                  value={novoDocumento}
+                  onChange={(e) => setNovoDocumento(e.target.value)}
+                  placeholder="Ex.: Ata de eleição 2026"
+                  style={{
+                    flex: 1,
+                    minWidth: 220,
+                    padding: 11,
+                    border: "1px solid #cbd5e1",
+                    borderRadius: 8,
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={adicionarDocumento}
+                  style={{
+                    border: "none",
+                    borderRadius: 8,
+                    padding: "10px 16px",
+                    background: "#198754",
+                    color: "#fff",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Adicionar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMostrarAdicionar(false);
+                    setNovoDocumento("");
+                  }}
+                  style={{
+                    border: "none",
+                    borderRadius: 8,
+                    padding: "10px 16px",
+                    background: "#e2e8f0",
+                    color: "#334155",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+              gap: 14,
+            }}
+          >
+            {categoriasDocumentos.map((categoria) => {
+              const aberto = categoriasAbertas.includes(categoria.nome);
+              const termo = pesquisa.toLowerCase().trim();
+
+              const documentosDaCategoria = categoria.documentos.filter((documento) => {
+                if (filtroDocumentos === "baixados") {
+                  return documentosBaixados.includes(documento.id);
+                }
+                if (filtroDocumentos === "pendentes") {
+                  return !documentosBaixados.includes(documento.id);
+                }
+                return true;
+              });
+
+              const documentosPesquisados = documentosDaCategoria.filter((documento) => {
+                if (!termo) return true;
+                return (
+                  documento.nome.toLowerCase().includes(termo) ||
+                  (documento.nomeArquivo || "").toLowerCase().includes(termo) ||
+                  categoria.nome.toLowerCase().includes(termo)
+                );
+              });
+
+              const baixadosCategoria = categoria.documentos.filter((documento) =>
+                documentosBaixados.includes(documento.id)
+              ).length;
+
+              const totalCategoria = categoria.documentos.length;
+              const pendentesCategoria = totalCategoria - baixadosCategoria;
+              const percentual =
+                totalCategoria > 0
+                  ? Math.round((baixadosCategoria / totalCategoria) * 100)
+                  : 0;
+
+              if (termo && documentosPesquisados.length === 0) return null;
+              if (
+                filtroDocumentos !== "todos" &&
+                documentosPesquisados.length === 0
+              ) {
+                return null;
+              }
+
+              return (
+                <div
+                  key={categoria.nome}
+                  style={{
+                    border: aberto ? "2px solid #4f8df7" : "1px solid #dce4ee",
+                    borderRadius: 15,
+                    overflow: "hidden",
+                    background: "#fff",
+                    boxShadow: "0 3px 12px rgba(15,23,42,.04)",
+                    gridColumn: aberto ? "1 / -1" : undefined,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => alternarCategoria(categoria.nome)}
+                    style={{
+                      width: "100%",
+                      border: "none",
+                      background: categoria.cor,
+                      padding: 17,
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 12,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <span
+                          style={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 13,
+                            background: "#fff",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 23,
+                            boxShadow: "0 2px 6px rgba(15,23,42,.06)",
+                          }}
+                        >
+                          {categoria.icone}
+                        </span>
+
+                        <div>
+                          <strong
+                            style={{
+                              display: "block",
+                              color: "#243447",
+                              fontSize: 16,
+                            }}
+                          >
+                            {categoria.nome}
+                          </strong>
+                          <span style={{ color: "#64748b", fontSize: 12 }}>
+                            {totalCategoria} documento(s)
+                          </span>
+                        </div>
+                      </div>
+
+                      <span
+                        style={{
+                          width: 30,
+                          height: 30,
+                          borderRadius: 9,
+                          background: "#fff",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "#334155",
+                          fontSize: 19,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {aberto ? "⌃" : "›"}
+                      </span>
+                    </div>
+
+                    <div style={{ marginTop: 15 }}>
+                      <div
+                        style={{
+                          height: 7,
+                          background: "rgba(100,116,139,.18)",
+                          borderRadius: 99,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${percentual}%`,
+                            height: "100%",
+                            background: "#20a866",
+                            borderRadius: 99,
+                            transition: "width .2s ease",
+                          }}
+                        />
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 10,
+                          marginTop: 7,
+                          fontSize: 11,
+                          color: "#536274",
+                          fontWeight: 600,
+                        }}
+                      >
+                        <span>🟢 {baixadosCategoria} baixado(s)</span>
+                        <span>🟠 {pendentesCategoria} pendente(s)</span>
+                      </div>
+                    </div>
+                  </button>
+
+                  {aberto && (
+                    <div style={{ padding: 18, background: "#fff" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: 12,
+                          flexWrap: "wrap",
+                          marginBottom: 14,
+                        }}
+                      >
+                        <div>
+                          <h3 style={{ margin: 0, color: "#1e293b", fontSize: 18 }}>
+                            {categoria.icone} {categoria.nome}
+                          </h3>
+                          <span style={{ color: "#64748b", fontSize: 12 }}>
+                            {baixadosCategoria} de {totalCategoria} conferido(s)
+                          </span>
+                        </div>
+
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              categoria.documentos
+                                .filter((documento) => documento.caminhoArquivo)
+                                .forEach((documento) => marcarDocumentoComoBaixado(documento.id));
+                            }}
+                            style={{
+                              border: "1px solid #b8dfc7",
+                              borderRadius: 8,
+                              padding: "8px 11px",
+                              background: "#effaf3",
+                              color: "#176b3c",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              fontSize: 12,
+                            }}
+                          >
+                            ✓ Marcar disponíveis como baixados
+                          </button>
+                        </div>
+                      </div>
+
+                      {documentosPesquisados.length === 0 ? (
+                        <div
+                          style={{
+                            padding: 25,
+                            textAlign: "center",
+                            border: "1px dashed #cbd5e1",
+                            borderRadius: 10,
+                            color: "#64748b",
+                            fontSize: 13,
+                          }}
+                        >
+                          Nenhum documento encontrado.
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            border: "1px solid #e2e8f0",
+                            borderRadius: 11,
+                            overflow: "hidden",
+                          }}
+                        >
+                          {documentosPesquisados.map((documento, indice) => {
+                            const baixado = documentosBaixados.includes(documento.id);
+                            const enviado = documento.status === "Concluído";
+
+                            return (
+                              <div
+                                key={documento.id}
+                                style={{
+                                  padding: 15,
+                                  borderBottom:
+                                    indice < documentosPesquisados.length - 1
+                                      ? "1px solid #e2e8f0"
+                                      : "none",
+                                  background: baixado ? "#f5fcf7" : "#fff",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "flex-start",
+                                    gap: 15,
+                                    flexWrap: "wrap",
+                                  }}
+                                >
+                                  <div style={{ flex: 1, minWidth: 230 }}>
+                                    <strong
+                                      style={{
+                                        display: "block",
+                                        color: "#26364a",
+                                        fontSize: 14,
+                                      }}
+                                    >
+                                      📄 {documento.nome}
+                                    </strong>
+
+                                    <div
+                                      style={{
+                                        marginTop: 6,
+                                        color: "#64748b",
+                                        fontSize: 12,
+                                        lineHeight: 1.6,
+                                      }}
+                                    >
+                                      {documento.nomeArquivo
+                                        ? `Arquivo: ${documento.nomeArquivo}`
+                                        : "Nenhum arquivo enviado ainda."}
+                                      {documento.dataEnvio && (
+                                        <>
+                                          <br />
+                                          Enviado em: {documento.dataEnvio}
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 7,
+                                      flexWrap: "wrap",
+                                    }}
+                                  >
+                                    <span
+                                      style={{
+                                        padding: "6px 9px",
+                                        borderRadius: 20,
+                                        background: baixado
+                                          ? "#dcfce7"
+                                          : enviado
+                                            ? "#fff7df"
+                                            : "#f1f5f9",
+                                        color: baixado
+                                          ? "#166534"
+                                          : enviado
+                                            ? "#9a6700"
+                                            : "#64748b",
+                                        fontSize: 11,
+                                        fontWeight: 800,
+                                      }}
+                                    >
+                                      {baixado
+                                        ? "🟢 Baixado"
+                                        : enviado
+                                          ? "🟠 Enviado"
+                                          : "⚪ Pendente"}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    gap: 7,
+                                    flexWrap: "wrap",
+                                    marginTop: 12,
+                                  }}
+                                >
+                                  {documento.caminhoArquivo && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          abrirDocumentoSalvo(documento.caminhoArquivo)
+                                        }
+                                        style={{
+                                          border: "1px solid #cbd5e1",
+                                          borderRadius: 7,
+                                          padding: "8px 10px",
+                                          background: "#fff",
+                                          color: "#334155",
+                                          fontWeight: 700,
+                                          cursor: "pointer",
+                                          fontSize: 12,
+                                        }}
+                                      >
+                                        👁 Visualizar
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => baixarDocumento(documento)}
+                                        style={{
+                                          border: "none",
+                                          borderRadius: 7,
+                                          padding: "8px 11px",
+                                          background: "#2563eb",
+                                          color: "#fff",
+                                          fontWeight: 700,
+                                          cursor: "pointer",
+                                          fontSize: 12,
+                                        }}
+                                      >
+                                        ⬇ Baixar
+                                      </button>
+                                    </>
+                                  )}
+
+                                  {enviado && !baixado && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        marcarDocumentoComoBaixado(documento.id)
+                                      }
+                                      style={{
+                                        border: "1px solid #16a34a",
+                                        borderRadius: 7,
+                                        padding: "8px 10px",
+                                        background: "#f0fdf4",
+                                        color: "#166534",
+                                        fontWeight: 700,
+                                        cursor: "pointer",
+                                        fontSize: 12,
+                                      }}
+                                    >
+                                      ✓ Marcar como baixado
+                                    </button>
+                                  )}
+
+                                  {documento.tipo === "arquivo" && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        abrirArquivo(documento.id, "proposta")
+                                      }
+                                      style={{
+                                        border: "none",
+                                        borderRadius: 7,
+                                        padding: "8px 10px",
+                                        background: "#eef4ff",
+                                        color: "#2457a6",
+                                        fontWeight: 700,
+                                        cursor: "pointer",
+                                        fontSize: 12,
+                                      }}
+                                    >
+                                      📤{" "}
+                                      {documento.arquivo || documento.nomeArquivo
+                                        ? "Trocar arquivo"
+                                        : "Anexar arquivo"}
+                                    </button>
+                                  )}
+
+                                  {documento.tipo === "link" && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        abrirLink(documento.id, documento.link)
+                                      }
+                                      style={{
+                                        border: "none",
+                                        borderRadius: 7,
+                                        padding: "8px 10px",
+                                        background: "#f3efff",
+                                        color: "#6941a5",
+                                        fontWeight: 700,
+                                        cursor: "pointer",
+                                        fontSize: 12,
+                                      }}
+                                    >
+                                      🔗{" "}
+                                      {documento.link
+                                        ? "Alterar link"
+                                        : "Adicionar link"}
+                                    </button>
+                                  )}
+                                </div>
+
+                                {documento.foiTrocado && documento.ultimaTroca && (
+                                  <div
+                                    style={{
+                                      marginTop: 10,
+                                      padding: 9,
+                                      borderRadius: 8,
+                                      background: "#fff7ed",
+                                      border: "1px solid #fed7aa",
+                                      color: "#9a3412",
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    🔄 Documento trocado em: {documento.ultimaTroca}. O
+                                    novo arquivo ficará sujeito a nova conferência.
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div
+            style={{
+              marginTop: 16,
+              padding: 11,
+              borderRadius: 9,
+              background: "#f8fafc",
+              color: "#64748b",
+              fontSize: 11,
+            }}
+          >
+            💡 <strong>Enviado</strong> significa que a instituição anexou o arquivo.
+            <strong> Baixado</strong> significa que você já conferiu o documento.
+          </div>
+        </div>
+
+        {/* ==========================================
+            MINHA CONTA
+           ========================================== */}
+        {mostrarMinhaConta && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,.45)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              padding: 20,
+              zIndex: 9999,
+            }}
+          >
+            <div
+              style={{
+                width: "100%",
+                maxWidth: 500,
+                background: "#fff",
+                borderRadius: 14,
+                padding: 25,
+                boxShadow: "0 10px 40px rgba(0,0,0,.25)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                <div>
+                  <h2 style={{ margin: 0, color: "#1f3c88" }}>👤 Minha conta</h2>
+                  <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 13 }}>Atualize sua senha de acesso ao Portal.</p>
+                </div>
+                <button type="button" onClick={() => setMostrarMinhaConta(false)} style={{ border: "none", background: "#f1f5f9", borderRadius: 8, padding: "7px 10px", cursor: "pointer", fontSize: 18 }}>✕</button>
+              </div>
+
+              <label style={{ display: "block", fontWeight: 600, color: "#334155", marginBottom: 6 }}>E-mail</label>
+              <input type="text" value={emailConta} disabled style={{ width: "100%", padding: 12, border: "1px solid #cbd5e1", borderRadius: 8, boxSizing: "border-box", marginBottom: 14, background: "#f8fafc", color: "#64748b" }} />
+
+              <label style={{ display: "block", fontWeight: 600, color: "#334155", marginBottom: 6 }}>Código da proposta</label>
+              <input type="text" value={codigoProposta} disabled style={{ width: "100%", padding: 12, border: "1px solid #cbd5e1", borderRadius: 8, boxSizing: "border-box", marginBottom: 14, background: "#f8fafc", color: "#64748b" }} />
+
+              <label style={{ display: "block", fontWeight: 600, color: "#334155", marginBottom: 6 }}>Senha atual</label>
+              <input type="password" value={senhaAtual} onChange={(e) => setSenhaAtual(e.target.value)} placeholder="Digite sua senha atual" style={{ width: "100%", padding: 12, border: "1px solid #cbd5e1", borderRadius: 8, boxSizing: "border-box", marginBottom: 14 }} />
+
+              <label style={{ display: "block", fontWeight: 600, color: "#334155", marginBottom: 6 }}>Nova senha</label>
+              <input type="password" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} placeholder="Mínimo de 6 caracteres" style={{ width: "100%", padding: 12, border: "1px solid #cbd5e1", borderRadius: 8, boxSizing: "border-box", marginBottom: 14 }} />
+
+              <label style={{ display: "block", fontWeight: 600, color: "#334155", marginBottom: 6 }}>Confirmar nova senha</label>
+              <input type="password" value={confirmarNovaSenha} onChange={(e) => setConfirmarNovaSenha(e.target.value)} placeholder="Repita a nova senha" onKeyDown={(e) => { if (e.key === "Enter") alterarSenha(); }} style={{ width: "100%", padding: 12, border: "1px solid #cbd5e1", borderRadius: 8, boxSizing: "border-box", marginBottom: 20 }} />
+
+              <div style={{ display: "flex", gap: 10 }}>
+                <button type="button" onClick={alterarSenha} disabled={alterandoSenha} style={{ flex: 1, border: "none", borderRadius: 8, padding: 12, background: alterandoSenha ? "#94a3b8" : "#2563eb", color: "#fff", fontWeight: 700, cursor: alterandoSenha ? "wait" : "pointer" }}>
+                  {alterandoSenha ? "Alterando..." : "🔐 Alterar senha"}
+                </button>
+                <button type="button" onClick={() => setMostrarMinhaConta(false)} style={{ flex: 1, border: "none", borderRadius: 8, padding: 12, background: "#e2e8f0", color: "#334155", fontWeight: 600, cursor: "pointer" }}>Cancelar</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==========================================
+            FASE DE PAGAMENTOS
+           ========================================== */}
+
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: 14,
+            padding: 30,
+            boxShadow: "0 5px 20px rgba(0,0,0,.10)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 15,
+              flexWrap: "wrap",
+              marginBottom: 20,
+            }}
+          >
+            <div>
+              <h2 style={{ margin: 0, color: "#334155", fontSize: 24 }}>
+                💰 Fase de Pagamentos
+              </h2>
+              <p style={{ margin: "7px 0 0", color: "#64748b", fontSize: 14, maxWidth: 760 }}>
+                Organize os documentos por mês, fornecedor e tipo de documento.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setMostrarNovoMes(true)}
+              style={{ border: "none", borderRadius: 8, padding: "11px 16px", background: "#2563eb", color: "#fff", fontWeight: 700, cursor: "pointer" }}
+            >
+              ＋ Novo mês
+            </button>
+          </div>
+
+          <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: 14, marginBottom: 22, color: "#1e40af", fontSize: 14 }}>
+            📌 Cada mês possui seus próprios fornecedores. Dentro de cada fornecedor ficam os documentos.
+            <strong> A instituição pode anexar ou substituir arquivos, mas não pode excluir documentos.</strong>
+          </div>
+
+          {mostrarNovoMes && (
+            <div style={{ background: "#f8fafc", border: "1px solid #dbe3ef", borderRadius: 12, padding: 20, marginBottom: 25 }}>
+              <h3 style={{ margin: "0 0 15px", color: "#334155" }}>📅 Criar mês de conferência</h3>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                <select value={novoMes} onChange={(e) => setNovoMes(Number(e.target.value))} style={{ padding: 11, border: "1px solid #cbd5e1", borderRadius: 7, fontSize: 15, background: "#fff" }}>
+                  {nomesMeses.map((nome, indice) => <option key={indice} value={indice + 1}>{nome}</option>)}
+                </select>
+                <select value={novoAno} onChange={(e) => setNovoAno(Number(e.target.value))} style={{ padding: 11, border: "1px solid #cbd5e1", borderRadius: 7, fontSize: 15, background: "#fff" }}>
+                  {Array.from({ length: 7 }, (_, i) => new Date().getFullYear() - 2 + i).map((ano) => <option key={ano} value={ano}>{ano}</option>)}
+                </select>
+                <button type="button" onClick={criarMesPagamento} style={{ border: "none", borderRadius: 7, padding: "11px 18px", background: "#198754", color: "#fff", fontWeight: 700, cursor: "pointer" }}>Criar mês</button>
+                <button type="button" onClick={() => setMostrarNovoMes(false)} style={{ border: "none", borderRadius: 7, padding: "11px 18px", background: "#e2e8f0", color: "#334155", fontWeight: 600, cursor: "pointer" }}>Cancelar</button>
+              </div>
+            </div>
+          )}
+
+          {mesesPagamento.length === 0 && !mostrarNovoMes && (
+            <div style={{ textAlign: "center", padding: "40px 20px", border: "1px dashed #cbd5e1", borderRadius: 12, color: "#64748b" }}>
+              <div style={{ fontSize: 40, marginBottom: 10 }}>📅</div>
+              <strong style={{ display: "block", color: "#334155", fontSize: 17, marginBottom: 6 }}>Nenhum mês criado</strong>
+              <span style={{ fontSize: 14 }}>Clique em <strong>＋ Novo mês</strong> para começar.</span>
+            </div>
+          )}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {mesesPagamento.map((mes) => {
+              const concluidosMes = quantidadeConcluida(mes);
+              const pendentesMes = quantidadePendente(mes);
+              const totalMes = documentosVisiveis(mes).length;
+              const completo = totalMes > 0 && pendentesMes === 0;
+              const aberto = mesAberto === mes.id;
+
+              return (
+                <div key={mes.id} style={{ border: "1px solid #dbe3ef", borderRadius: 12, overflow: "hidden" }}>
+                  <div style={{ padding: 18, background: aberto ? "#f8fbff" : "#fff", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 15, flexWrap: "wrap" }}>
+                    <button type="button" onClick={() => alternarMes(mes.id)} style={{ border: "none", background: "transparent", cursor: "pointer", padding: 0, textAlign: "left", flex: 1, minWidth: 250 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 25 }}>{aberto ? "📂" : "📁"}</span>
+                        <div>
+                          <strong style={{ display: "block", color: "#334155", fontSize: 18 }}>{nomesMeses[mes.mes - 1]} {mes.ano}</strong>
+                          <span style={{ color: "#64748b", fontSize: 13 }}>{mes.fornecedores.length} fornecedor(es) · {totalMes} documentos visíveis</span>
+                        </div>
+                      </div>
+                    </button>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ background: completo ? "#dcfce7" : "#fff3cd", color: completo ? "#166534" : "#856404", padding: "6px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700 }}>{completo ? "🟢 Completo" : "🟡 Pendente"}</span>
+                      <span style={{ background: "#f1f5f9", color: "#475569", padding: "6px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{concluidosMes}/{totalMes} concluídos</span>
+                      <button type="button" onClick={() => removerMes(mes.id)} style={{ border: "none", background: "transparent", color: "#94a3b8", cursor: "pointer", padding: 5, fontSize: 16 }} title="Remover mês">🗑️</button>
+                      <button type="button" onClick={() => alternarMes(mes.id)} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: 7, padding: "7px 12px", color: "#334155", cursor: "pointer", fontWeight: 600 }}>{aberto ? "Fechar" : "Abrir"}</button>
+                    </div>
+                  </div>
+
+                  {aberto && (
+                    <div style={{ borderTop: "1px solid #dbe3ef", padding: 22, background: "#fff" }}>
+                      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+                        <input type="text" value={pesquisaPagamento} onChange={(e) => setPesquisaPagamento(e.target.value)} placeholder="🔎 Pesquisar fornecedor ou documento..." style={{ flex: 1, minWidth: 250, padding: 13, border: "1px solid #cbd5e1", borderRadius: 8, boxSizing: "border-box", fontSize: 14 }} />
+                        <button type="button" onClick={() => setMostrarAdicionarPagamento(true)} style={{ border: "none", borderRadius: 8, padding: "11px 16px", background: "#2563eb", color: "#fff", fontWeight: 700, cursor: "pointer" }}>＋ Adicionar fornecedor</button>
+                      </div>
+
+                      {mostrarAdicionarPagamento && (
+                        <div style={{ background: "#f8fafc", border: "1px solid #dbe3ef", borderRadius: 10, padding: 18, marginBottom: 20 }}>
+                          <strong style={{ display: "block", marginBottom: 10, color: "#334155" }}>Adicionar fornecedor neste mês</strong>
+                          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                            <input type="text" value={novoFornecedor} onChange={(e) => setNovoFornecedor(e.target.value)} placeholder="Nome do fornecedor" style={{ flex: 1, minWidth: 240, padding: 11, border: "1px solid #cbd5e1", borderRadius: 7 }} />
+                            <button type="button" onClick={adicionarFornecedorPagamento} style={{ border: "none", borderRadius: 7, padding: "10px 16px", background: "#198754", color: "#fff", fontWeight: 700, cursor: "pointer" }}>Adicionar</button>
+                            <button type="button" onClick={() => { setMostrarAdicionarPagamento(false); setNovoFornecedor(""); }} style={{ border: "none", borderRadius: 7, padding: "10px 16px", background: "#e2e8f0", color: "#334155", fontWeight: 600, cursor: "pointer" }}>Cancelar</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {mes.fornecedores.filter((fornecedor) => {
+                        const termo = pesquisaPagamento.toLowerCase().trim();
+                        if (!termo) return true;
+                        return fornecedor.nome.toLowerCase().includes(termo) || fornecedor.documentos.some((documento) => documento.nome.toLowerCase().includes(termo));
+                      }).map((fornecedor) => {
+                        const fornecedorAbertoAtual = fornecedorAberto === fornecedor.id;
+                        const docsVisiveis = fornecedor.documentos.filter((documento) => !documento.oculto);
+                        const concluidosFornecedor = docsVisiveis.filter((documento) => documento.status === "Concluído").length;
+                        const pendentesFornecedor = docsVisiveis.length - concluidosFornecedor;
+
+                        return (
+                          <div key={fornecedor.id} style={{ border: "1px solid #cbd5e1", borderRadius: 12, marginBottom: 14, overflow: "hidden" }}>
+                            <div style={{ padding: 16, background: fornecedorAbertoAtual ? "#f8fbff" : "#fff", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                              <button type="button" onClick={() => alternarFornecedor(fornecedor.id)} style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", textAlign: "left", flex: 1, minWidth: 240 }}>
+                                <strong style={{ color: "#1f3c88", fontSize: 17 }}>🏢 {fornecedor.nome}</strong>
+                                <div style={{ color: "#64748b", fontSize: 13, marginTop: 4 }}>{concluidosFornecedor}/{docsVisiveis.length} documentos concluídos · {pendentesFornecedor} pendente(s)</div>
+                              </button>
+                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                <button type="button" onClick={() => renomearFornecedor(mes.id, fornecedor.id)} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: 7, padding: "7px 10px", cursor: "pointer", fontWeight: 600, color: "#334155" }}>✏️ Editar nome</button>
+                                <button type="button" onClick={() => alternarFornecedor(fornecedor.id)} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: 7, padding: "7px 10px", cursor: "pointer", fontWeight: 600, color: "#334155" }}>{fornecedorAbertoAtual ? "Fechar" : "Abrir"}</button>
+                              </div>
+                            </div>
+
+                            {fornecedorAbertoAtual && (
+                              <div style={{ borderTop: "1px solid #dbe3ef", padding: 18, background: "#fff" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+                                  <div>
+                                    <strong style={{ color: "#334155" }}>📂 Documentos de {fornecedor.nome}</strong>
+                                    <div style={{ color: "#64748b", fontSize: 13, marginTop: 3 }}>Cotação, certidões, contrato, nota fiscal e outros documentos.</div>
+                                  </div>
+                                  <button type="button" onClick={() => setMostrarAdicionarPagamento(true)} style={{ border: "none", borderRadius: 7, padding: "9px 13px", background: "#2563eb", color: "#fff", fontWeight: 700, cursor: "pointer" }}>＋ Adicionar documento</button>
+                                </div>
+
+                                {mostrarAdicionarPagamento && (
+                                  <div style={{ background: "#f8fafc", border: "1px solid #dbe3ef", borderRadius: 10, padding: 15, marginBottom: 18 }}>
+                                    <strong style={{ display: "block", marginBottom: 9, color: "#334155" }}>Novo documento para este fornecedor</strong>
+                                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                                      <input type="text" value={novoDocumentoPagamento} onChange={(e) => setNovoDocumentoPagamento(e.target.value)} placeholder="Ex.: Recibo, comprovante, contrato..." style={{ flex: 1, minWidth: 240, padding: 10, border: "1px solid #cbd5e1", borderRadius: 7 }} />
+                                      <button type="button" onClick={adicionarDocumentoPagamento} style={{ border: "none", borderRadius: 7, padding: "10px 15px", background: "#198754", color: "#fff", fontWeight: 700, cursor: "pointer" }}>Adicionar</button>
+                                      <button type="button" onClick={() => { setMostrarAdicionarPagamento(false); setNovoDocumentoPagamento(""); }} style={{ border: "none", borderRadius: 7, padding: "10px 15px", background: "#e2e8f0", color: "#334155", fontWeight: 600, cursor: "pointer" }}>Cancelar</button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexWrap: "wrap",
+                                    gap: 14,
+                                    width: "100%",
+                                    boxSizing: "border-box",
+                                    alignItems: "stretch",
+                                  }}
+                                >
+                                  {fornecedor.documentos
+                                    .filter((documento) => !documento.oculto)
+                                    .filter((documento) => {
+                                      const termo = pesquisaPagamento.toLowerCase().trim();
+                                      return (
+                                        !termo ||
+                                        documento.nome.toLowerCase().includes(termo) ||
+                                        fornecedor.nome.toLowerCase().includes(termo)
+                                      );
+                                    })
+                                    .map((documento) => (
+                                      <div
+                                        key={documento.id}
+                                        style={{
+                                          border: "1px solid #dbe3ef",
+                                          borderRadius: 12,
+                                          padding: 14,
+                                          background: "#f8fafc",
+                                          width: "calc((100% - 28px) / 3)",
+                                          minWidth: 0,
+                                          boxSizing: "border-box",
+                                          flex: "0 0 calc((100% - 28px) / 3)",
+                                        }}
+                                      >
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            alignItems: "center",
+                                            gap: 8,
+                                            marginBottom: 12,
+                                          }}
+                                        >
+                                          <strong
+                                            style={{
+                                              color: "#1e3a8a",
+                                              fontSize: 16,
+                                              lineHeight: 1.25,
+                                            }}
+                                          >
+                                            📄 {documento.nome}
+                                          </strong>
+
+                                          <span
+                                            style={{
+                                              background:
+                                                documento.status === "Concluído"
+                                                  ? "#dcfce7"
+                                                  : "#fff3cd",
+                                              color:
+                                                documento.status === "Concluído"
+                                                  ? "#166534"
+                                                  : "#856404",
+                                              padding: "7px 9px",
+                                              borderRadius: 20,
+                                              fontSize: 11,
+                                              fontWeight: 700,
+                                              whiteSpace: "nowrap",
+                                            }}
+                                          >
+                                            {documento.status === "Concluído"
+                                              ? "Concluído"
+                                              : "Pendente"}
+                                          </span>
+                                        </div>
+
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            abrirArquivo(
+                                              documento.id,
+                                              "pagamento",
+                                              mes.id,
+                                              fornecedor.id
+                                            )
+                                          }
+                                          style={{
+                                            width: "100%",
+                                            minHeight: 39,
+                                            padding: "9px 10px",
+                                            border: "none",
+                                            borderRadius: 7,
+                                            background: "#2563eb",
+                                            color: "#fff",
+                                            fontWeight: 700,
+                                            cursor: "pointer",
+                                          }}
+                                        >
+                                          📤 {documento.arquivo
+                                            ? "Trocar arquivo"
+                                            : "Anexar arquivo"}
+                                        </button>
+
+                                        {documento.caminhoArquivo && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              abrirDocumentoSalvo(
+                                                documento.caminhoArquivo as string
+                                              )
+                                            }
+                                            style={{
+                                              width: "100%",
+                                              minHeight: 37,
+                                              padding: "8px 10px",
+                                              marginTop: 7,
+                                              border: "1px solid #16a34a",
+                                              borderRadius: 7,
+                                              background: "#f0fdf4",
+                                              color: "#166534",
+                                              fontWeight: 700,
+                                              cursor: "pointer",
+                                              fontSize: 12,
+                                            }}
+                                          >
+                                            📂 Abrir arquivo salvo
+                                          </button>
+                                        )}
+
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            ocultarDocumento(
+                                              mes.id,
+                                              fornecedor.id,
+                                              documento.id
+                                            )
+                                          }
+                                          style={{
+                                            width: "100%",
+                                            padding: 7,
+                                            marginTop: 7,
+                                            border: "none",
+                                            background: "transparent",
+                                            color: "#64748b",
+                                            fontSize: 11,
+                                            cursor: "pointer",
+                                          }}
+                                        >
+                                          👁️ Ocultar deste mês
+                                        </button>
+                                      </div>
+                                    ))}
+                                </div>
+
+                                {fornecedor.documentos.some((documento) => documento.oculto) && (
+                                  <div style={{ marginTop: 14, padding: 11, background: "#f8fafc", borderRadius: 8, color: "#64748b", fontSize: 12 }}>
+                                    👁️ {fornecedor.documentos.filter((documento) => documento.oculto).length} documento(s) ocultado(s). Eles não entram na contagem de pendências.
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ==========================================
+            INPUT DE ARQUIVO
+           ========================================== */}
+
+        <input
+          ref={inputArquivo}
+          type="file"
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp"
+          style={{
+            display: "none",
+          }}
+          onChange={
+            selecionarArquivo
+          }
+        />
+
+        {/* ==========================================
+            MODAL DE LINK
+           ========================================== */}
+
+        {linkAberto !== null && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background:
+                "rgba(0,0,0,.45)",
+              display: "flex",
+              justifyContent:
+                "center",
+              alignItems: "center",
+              padding: 20,
+              zIndex: 9999,
+            }}
+          >
+            <div
+              style={{
+                width: "100%",
+                maxWidth: 500,
+                background: "#fff",
+                borderRadius: 14,
+                padding: 25,
+                boxShadow:
+                  "0 10px 40px rgba(0,0,0,.25)",
+              }}
+            >
+              <h2
+                style={{
+                  marginTop: 0,
+                  color: "#334155",
+                }}
+              >
+                🔗 Adicionar link
+              </h2>
+
+              <p
+                style={{
+                  color: "#64748b",
+                  fontSize: 14,
+                }}
+              >
+                Informe o endereço do
+                site, página ou outro
+                link solicitado.
+              </p>
+
+              <input
+                type="url"
+                value={valorLink}
+                onChange={(e) =>
+                  setValorLink(
+                    e.target.value
+                  )
+                }
+                placeholder="https://www.exemplo.com.br"
+                style={{
+                  width: "100%",
+                  padding: 13,
+                  border:
+                    "1px solid #cbd5e1",
+                  borderRadius: 8,
+                  boxSizing:
+                    "border-box",
+                  marginBottom: 15,
+                }}
+              />
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={salvarLink}
+                  style={{
+                    flex: 1,
+                    padding: 12,
+                    border: "none",
+                    borderRadius: 8,
+                    background:
+                      "#198754",
+                    color: "#fff",
+                    fontWeight: 700,
+                    cursor:
+                      "pointer",
+                  }}
+                >
+                  Salvar link
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLinkAberto(
+                      null
+                    );
+                    setValorLink("");
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: 12,
+                    border: "none",
+                    borderRadius: 8,
+                    background:
+                      "#e2e8f0",
+                    color:
+                      "#334155",
+                    fontWeight: 600,
+                    cursor:
+                      "pointer",
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

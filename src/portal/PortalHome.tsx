@@ -52,6 +52,14 @@ const documentosIniciais: Documento[] = [
   { id: 13, nome: "Planilha orçamentária do projeto", tipo: "arquivo", status: "Pendente" },
   { id: 14, nome: "Site da instituição", tipo: "link", status: "Pendente" },
   { id: 15, nome: "Redes sociais da instituição", tipo: "link", status: "Pendente" },
+  { id: 16, nome: "Certidão Municipal", tipo: "arquivo", status: "Pendente" },
+  { id: 17, nome: "Certidão Estadual", tipo: "arquivo", status: "Pendente" },
+  { id: 18, nome: "Certidão Federal", tipo: "arquivo", status: "Pendente" },
+  { id: 19, nome: "Certidão do FGTS", tipo: "arquivo", status: "Pendente" },
+  { id: 20, nome: "Certidão Trabalhista", tipo: "arquivo", status: "Pendente" },
+  { id: 21, nome: "CAUC", tipo: "arquivo", status: "Pendente" },
+  { id: 22, nome: "CEPIM", tipo: "arquivo", status: "Pendente" },
+  { id: 23, nome: "Outras certidões", tipo: "arquivo", status: "Pendente" },
 ];
 
 const documentosPagamentoIniciais = (): Documento[] => [
@@ -243,11 +251,33 @@ export default function PortalHome() {
 
         setDocumentos((listaAtual) =>
           listaAtual.map((documento) => {
+            const normalizarDocumento = (valor: string) =>
+              valor
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, " ")
+                .trim();
+
             const documentosDoMesmoNome = data
-              .filter(
-                (item: any) =>
-                  item.nome_documento === documento.nome
-              )
+              .filter((item: any) => {
+                if (item.nome_documento === documento.nome) return true;
+
+                // Compatibilidade com arquivos antigos registrados com o nome genérico "Certidões".
+                if (item.nome_documento === "Certidões") {
+                  const arquivo = normalizarDocumento(item.nome_arquivo || "");
+                  if (documento.nome === "Certidão Municipal" && /municipal/.test(arquivo)) return true;
+                  if (documento.nome === "Certidão Estadual" && /estadual/.test(arquivo)) return true;
+                  if (documento.nome === "Certidão Federal" && /federal|uniao|tributos federais/.test(arquivo)) return true;
+                  if (documento.nome === "Certidão do FGTS" && /fgts|crf/.test(arquivo)) return true;
+                  if (documento.nome === "Certidão Trabalhista" && /trabalhista|cndt/.test(arquivo)) return true;
+                  if (documento.nome === "CAUC" && /cauc/.test(arquivo)) return true;
+                  if (documento.nome === "CEPIM" && /cepim/.test(arquivo)) return true;
+                  if (documento.nome === "Outras certidões" && /certidao|cnd/.test(arquivo) && !/municipal|estadual|federal|fgts|trabalhista|cndt|cauc|cepim/.test(arquivo)) return true;
+                }
+
+                return false;
+              })
               .sort(
                 (a: any, b: any) =>
                   new Date(b.enviado_em).getTime() -
@@ -1292,62 +1322,34 @@ export default function PortalHome() {
     }
   });
 
+  const normalizarNomeDocumento = (valor: string) =>
+    valor
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+
+  const categoriaDoDocumento = (documento: Documento) => {
+    const nome = normalizarNomeDocumento(
+      `${documento.nome} ${documento.nomeArquivo || ""}`
+    );
+
+    if (/certidao|certidoes|\bcnd\b|regularidade fiscal|cauc|cepim|fgts|trabalhista|cartao cnpj|registro em conselhos/.test(nome)) return "Certidões";
+    if (/declaracao|declaracoes|termo de declaracao/.test(nome)) return "Declarações";
+    if (/foto|fotografia|imagem/.test(nome)) return "Fotos";
+    if (/documento bancario|documentos bancarios|dados bancarios|extrato bancario|conta bancaria|comprovante bancario|agencia bancaria/.test(nome)) return "Documentos bancários";
+    if (/site da instituicao|website|pagina oficial|redes sociais|instagram|facebook/.test(nome)) return "Site da instituição";
+    if (/estatuto|ata de|comprovante de endereco|rg ou cnh|curriculo|portfolio/.test(nome)) return "Outros documentos";
+    return "Outros";
+  };
+
   const categoriasDocumentos = [
-    {
-      nome: "Certidões",
-      icone: "📄",
-      cor: "#eaf3ff",
-      documentos: documentos.filter(
-        (documento) => documento.nome === "Certidões"
-      ),
-    },
-    {
-      nome: "Declarações",
-      icone: "📑",
-      cor: "#fff8df",
-      documentos: documentos.filter(
-        (documento) => documento.nome === "Declarações"
-      ),
-    },
-    {
-      nome: "Fotos",
-      icone: "📷",
-      cor: "#fff0f2",
-      documentos: documentos.filter(
-        (documento) => documento.nome === "Fotos"
-      ),
-    },
-    {
-      nome: "Documentos bancários",
-      icone: "🏦",
-      cor: "#eefbf4",
-      documentos: documentos.filter(
-        (documento) => documento.nome === "Documentos bancários"
-      ),
-    },
-    {
-      nome: "Site da instituição",
-      icone: "🔗",
-      cor: "#f3efff",
-      documentos: documentos.filter(
-        (documento) => documento.nome === "Site da instituição"
-      ),
-    },
-    {
-      nome: "Outros documentos",
-      icone: "📁",
-      cor: "#f4f6f8",
-      documentos: documentos.filter(
-        (documento) =>
-          ![
-            "Certidões",
-            "Declarações",
-            "Fotos",
-            "Documentos bancários",
-            "Site da instituição",
-          ].includes(documento.nome)
-      ),
-    },
+    { nome: "Certidões", icone: "📄", cor: "#eaf3ff", documentos: documentos.filter((documento) => categoriaDoDocumento(documento) === "Certidões") },
+    { nome: "Declarações", icone: "📑", cor: "#fff8df", documentos: documentos.filter((documento) => categoriaDoDocumento(documento) === "Declarações") },
+    { nome: "Fotos", icone: "📷", cor: "#fff0f2", documentos: documentos.filter((documento) => categoriaDoDocumento(documento) === "Fotos") },
+    { nome: "Documentos bancários", icone: "🏦", cor: "#eefbf4", documentos: documentos.filter((documento) => categoriaDoDocumento(documento) === "Documentos bancários") },
+    { nome: "Site da instituição", icone: "🔗", cor: "#f3efff", documentos: documentos.filter((documento) => categoriaDoDocumento(documento) === "Site da instituição") },
+    { nome: "Outros documentos", icone: "📁", cor: "#f4f6f8", documentos: documentos.filter((documento) => categoriaDoDocumento(documento) === "Outros documentos") },
+    { nome: "Outros", icone: "🗂️", cor: "#f7f0ff", documentos: documentos.filter((documento) => categoriaDoDocumento(documento) === "Outros") },
   ];
 
   const documentosDisponiveis = documentos.filter(
@@ -1358,7 +1360,9 @@ export default function PortalHome() {
   const totalBaixados = documentosBaixados.filter((id) =>
     documentosDisponiveis.some((documento) => documento.id === id)
   ).length;
-  const pendentes = totalDocumentos - totalBaixados;
+  const pendentes = documentos.filter(
+    (documento) => documento.status !== "Concluído"
+  ).length;
 
   function alternarCategoria(nome: string) {
     setCategoriasAbertas((atual) =>
