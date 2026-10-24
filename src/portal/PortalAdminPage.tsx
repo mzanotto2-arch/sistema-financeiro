@@ -98,25 +98,7 @@ type MesPagamento = {
 
 };
 
-const DOCUMENTOS_PROPOSTA = [
 
-  "Estatuto",
-
-  "Portfólio",
-
-  "CNPJ",
-
-  "Certidões",
-
-  "Declarações",
-
-  "Fotos",
-
-  "Documentos bancários",
-
-  "Site da instituição",
-
-];
 
 const DOCUMENTOS_PAGAMENTO = [
 
