@@ -191,9 +191,13 @@ export default async function handler(req: any, res: any) {
           ],
           input:
             `Execute agora uma ${pesquisa} para o Clube de Captação de Recursos. ` +
-            "Pesquise na web neste momento. Retorne somente oportunidades para as quais a fonte oficial confirme que as inscrições estão abertas e informe o prazo final de submissão. " +
-            "Para cada oportunidade, informe nome do edital, órgão responsável, público elegível, abrangência geográfica, valor ou faixa de apoio se publicado, prazo final e link oficial. " +
-            "Não invente informações. Se não conseguir confirmar oportunidades abertas e seus prazos em fontes oficiais, diga claramente que não encontrou oportunidades confirmadas.",
+            `Considere a data atual no Brasil: ${new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}. ` +
+            "Pesquise na web neste momento e confira as informações em páginas ou documentos oficiais da instituição responsável. " +
+            "Inclua somente oportunidades cujo período de inscrição esteja aberto na data atual. Não inclua editais encerrados, suspensos, futuros sem inscrições abertas ou oportunidades cujo prazo não possa ser confirmado. " +
+            "Em pesquisas por estado, separe: (1) oportunidades específicas daquele estado; (2) oportunidades nacionais que também aceitam organizações daquele estado. Nunca apresente uma oportunidade nacional como exclusiva do estado. " +
+            "Para cada oportunidade, informe nome do edital, órgão ou instituição responsável, público elegível, abrangência geográfica, valor ou faixa de apoio quando divulgado, requisitos importantes para a OSC, prazo final com data e horário quando publicado e link direto da página ou documento oficial. " +
+            "Não use notícias ou agregadores como única comprovação. Não invente valores, prazos, requisitos ou links. Se a fonte oficial não confirmar que as inscrições estão abertas e o prazo final, não inclua a oportunidade. " +
+            "Se não encontrar oportunidades que atendam a todos esses critérios, informe claramente que não encontrou editais com inscrições abertas e confirmação oficial neste momento.",
           max_output_tokens: 2200,
         }),
       });
